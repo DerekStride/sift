@@ -12,6 +12,7 @@ module Sift
       @current = 0
       @decisions = []
       @sessions = {} # file -> session_id for continuity
+      @analyses = {} # hunk index -> analysis result
     end
 
     def run
@@ -25,14 +26,33 @@ module Sift
         break if @current >= @hunks.length
 
         hunk = @hunks[@current]
-        analysis = analyze_hunk(hunk)
-        display_review(hunk, analysis)
+        display_hunk(hunk)
 
-        action = prompt_action
+        action = prompt_action(has_analysis: @analyses.key?(@current))
         break if action == :quit
 
-        handle_action(action, hunk, analysis)
-        @current += 1
+        case action
+        when :analyze
+          analysis = analyze_hunk(hunk)
+          @analyses[@current] = analysis
+          display_analysis(analysis)
+          redo # Show prompt again for same hunk
+        when :revise
+          # Can only revise if we have analysis
+          unless @analyses.key?(@current)
+            puts CLI::UI.fmt("{{yellow:No analysis to revise. Press '?' first.}}")
+            redo
+          end
+          feedback = CLI::UI::Prompt.ask("Revision feedback:")
+          puts CLI::UI.fmt("{{magenta:↻ Revising...}}")
+          revised = revise_analysis(hunk, feedback)
+          @analyses[@current] = revised
+          display_analysis(revised)
+          redo
+        else
+          handle_action(action, hunk)
+          @current += 1
+        end
       end
 
       show_summary
@@ -64,25 +84,9 @@ module Sift
       end
     end
 
-    def analyze_hunk(hunk)
-      result = nil
-      CLI::UI::Spinner.spin("Analyzing #{hunk.file}...") do |spinner|
-        session_id = @sessions[hunk.file]
-        result = @client.analyze_diff(
-          hunk.content,
-          file: hunk.file,
-          session_id: session_id
-        )
-        @sessions[hunk.file] = result.session_id
-        spinner.update_title("Analysis complete")
-      end
-      result
-    end
-
-    def display_review(hunk, analysis)
+    def display_hunk(hunk)
       puts
       CLI::UI::Frame.open("{{bold:#{hunk.file}}} {{cyan:(#{@current + 1}/#{@hunks.length})}}", color: :yellow) do
-        puts CLI::UI.fmt("{{bold:Diff:}}")
         hunk.content.each_line do |line|
           formatted = case line[0]
           when "+" then CLI::UI.fmt("{{green:#{line.chomp}}}")
@@ -92,16 +96,38 @@ module Sift
           end
           puts formatted
         end
+      end
+    end
 
-        puts
-        puts CLI::UI.fmt("{{bold:Analysis:}}")
+    def display_analysis(analysis)
+      puts
+      CLI::UI::Frame.open("{{bold:Analysis}}", color: :magenta) do
         puts analysis.response
       end
     end
 
-    def prompt_action
+    def analyze_hunk(hunk)
+      result = nil
+      CLI::UI::Spinner.spin("Asking Claude...") do |spinner|
+        session_id = @sessions[hunk.file]
+        result = @client.analyze_diff(
+          hunk.content,
+          file: hunk.file,
+          session_id: session_id
+        )
+        @sessions[hunk.file] = result.session_id
+        spinner.update_title("Done")
+      end
+      result
+    end
+
+    def prompt_action(has_analysis:)
       puts
-      puts CLI::UI.fmt("{{bold:Actions:}} [{{green:a}}]ccept  [{{red:r}}]eject  [{{yellow:c}}]omment  [{{magenta:v}}]revise  [{{cyan:q}}]uit")
+      if has_analysis
+        puts CLI::UI.fmt("{{bold:Actions:}} [{{green:a}}]ccept  [{{red:r}}]eject  [{{yellow:c}}]omment  [{{magenta:v}}]revise  [{{blue:?}}]ask again  [{{cyan:q}}]uit")
+      else
+        puts CLI::UI.fmt("{{bold:Actions:}} [{{green:a}}]ccept  [{{red:r}}]eject  [{{yellow:c}}]omment  [{{blue:?}}]ask Claude  [{{cyan:q}}]uit")
+      end
       print CLI::UI.fmt("{{bold:Choice:}} ")
 
       loop do
@@ -119,10 +145,10 @@ module Sift
           puts CLI::UI.fmt("{{yellow:💬 Commented}}")
           return [:comment, comment]
         when "v"
-          puts
-          feedback = CLI::UI::Prompt.ask("Revision feedback:")
-          puts CLI::UI.fmt("{{magenta:↻ Revising...}}")
-          return [:revise, feedback]
+          return :revise
+        when "?"
+          puts CLI::UI.fmt("{{blue:🤖 Analyzing...}}")
+          return :analyze
         when "q"
           puts CLI::UI.fmt("{{cyan:Quitting...}}")
           return :quit
@@ -130,24 +156,32 @@ module Sift
       end
     end
 
-    def handle_action(action, hunk, analysis)
+    def handle_action(action, hunk)
+      analysis = @analyses[@current]
       case action
-      when :accept, :reject
-        @decisions << { file: hunk.file, action: action, response: analysis.response }
+      when :accept
+        perform_git_action(:accept, hunk)
+        @decisions << { file: hunk.file, action: :accept, response: analysis&.response }
+      when :reject
+        perform_git_action(:reject, hunk)
+        @decisions << { file: hunk.file, action: :reject, response: analysis&.response }
       when Array
         type, content = action
-        if type == :revise
-          # Re-analyze with feedback, don't advance
-          revised = revise_analysis(hunk, content)
-          display_review(hunk, revised)
-          new_action = prompt_action
-          return :quit if new_action == :quit
-          handle_action(new_action, hunk, revised)
-          @current -= 1 # Will be incremented back in main loop
-        else
-          @decisions << { file: hunk.file, action: type, comment: content, response: analysis.response }
-        end
+        @decisions << { file: hunk.file, action: type, comment: content, response: analysis&.response }
       end
+    end
+
+    def perform_git_action(action, hunk)
+      case action
+      when :accept
+        GitActions.stage_hunk(hunk, path: @path)
+        puts CLI::UI.fmt("{{green:Staged hunk}}")
+      when :reject
+        GitActions.revert_hunk(hunk, path: @path)
+        puts CLI::UI.fmt("{{red:Reverted hunk}}")
+      end
+    rescue GitActions::Error => e
+      puts CLI::UI.fmt("{{red:Git error: #{e.message}}}")
     end
 
     def revise_analysis(hunk, feedback)
@@ -157,7 +191,7 @@ module Sift
         prompt = "User feedback on your analysis: #{feedback}\n\nPlease revise your review."
         result = @client.prompt(prompt, session_id: session_id)
         @sessions[hunk.file] = result.session_id
-        spinner.update_title("Revised analysis complete")
+        spinner.update_title("Done")
       end
       result
     end
@@ -168,12 +202,12 @@ module Sift
         if @decisions.empty?
           puts CLI::UI.fmt("{{yellow:No decisions recorded.}}")
         else
-          accepted = @decisions.count { |d| d[:action] == :accept }
-          rejected = @decisions.count { |d| d[:action] == :reject }
+          staged = @decisions.count { |d| d[:action] == :accept }
+          reverted = @decisions.count { |d| d[:action] == :reject }
           commented = @decisions.count { |d| d[:action] == :comment }
 
-          puts CLI::UI.fmt("{{green:Accepted:}} #{accepted}")
-          puts CLI::UI.fmt("{{red:Rejected:}} #{rejected}")
+          puts CLI::UI.fmt("{{green:Staged:}} #{staged}")
+          puts CLI::UI.fmt("{{red:Reverted:}} #{reverted}")
           puts CLI::UI.fmt("{{yellow:Commented:}} #{commented}")
           puts CLI::UI.fmt("{{cyan:Remaining:}} #{@hunks.length - @current}")
         end
