@@ -377,7 +377,7 @@ module Sift
 
       def print_item_detail(item)
         if cli_ui_available?
-          ::CLI::UI::Frame.open("{{bold:Item #{item.id}}}", color: :blue) do
+          ::CLI::UI::Frame.open("{{bold:Item #{item.id}}}", color: :blue, to: @stdout) do
             @stdout.puts ::CLI::UI.fmt("{{bold:Status:}} #{status_color_code(item.status)}")
             @stdout.puts ::CLI::UI.fmt("{{bold:Created:}} {{gray:#{item.created_at}}}")
             @stdout.puts ::CLI::UI.fmt("{{bold:Updated:}} {{gray:#{item.updated_at}}}")

@@ -26,5 +26,9 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "cli-ui", "~> 2.0"
 
+  spec.add_development_dependency "minitest", "~> 5.0"
+  spec.add_development_dependency "minitest-reporters", "~> 1.6"
+  spec.add_development_dependency "rake", "~> 13.0"
+
   spec.metadata["rubygems_mfa_required"] = "true"
 end
