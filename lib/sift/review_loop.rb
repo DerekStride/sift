@@ -22,55 +22,55 @@ module Sift
 
       show_header
 
-      loop do
-        break if @current >= @items.length
-
+      while @current < @items.length
         item = @items[@current]
         setup_item(item)
-        display_current_source(width: terminal_width)
-
-        action = prompt_action(
-          has_analysis: @analyses.key?(@current),
-          multi_source: multi_source?,
-        )
-        break if action == :quit
-
-        case action
-        when :next_source
-          next_source
-          redo
-        when :prev_source
-          prev_source
-          redo
-        when :browse_sources
-          drill_down_file_browser
-          redo
-        when :analyze
-          analysis = analyze_item(item)
-          @analyses[@current] = analysis
-          display_analysis(analysis)
-          redo
-        when :revise
-          unless @analyses.key?(@current)
-            puts ::CLI::UI.fmt("{{yellow:No analysis to revise. Press '?' first.}}")
-            redo
-          end
-          feedback = ::CLI::UI::Prompt.ask("Revision feedback:")
-          puts ::CLI::UI.fmt("{{magenta:↻ Revising...}}")
-          revised = revise_analysis(item, feedback)
-          @analyses[@current] = revised
-          display_analysis(revised)
-          redo
-        else
-          handle_action(action, item)
-          @current += 1
-        end
+        break if review_item(item) == :quit
       end
 
       show_summary
     end
 
     private
+
+    def review_item(item)
+      loop do
+        display_current_source(width: terminal_width)
+
+        action = prompt_action(
+          has_analysis: @analyses.key?(@current),
+          multi_source: multi_source?,
+        )
+        return :quit if action == :quit
+
+        case action
+        when :next_source
+          next_source
+        when :prev_source
+          prev_source
+        when :browse_sources
+          drill_down_file_browser
+        when :analyze
+          analysis = analyze_item(item)
+          @analyses[@current] = analysis
+          display_analysis(analysis)
+        when :revise
+          unless @analyses.key?(@current)
+            puts ::CLI::UI.fmt("{{yellow:No analysis to revise. Press '?' first.}}")
+            next
+          end
+          feedback = ::CLI::UI::Prompt.ask("Revision feedback:")
+          puts ::CLI::UI.fmt("{{magenta:↻ Revising...}}")
+          revised = revise_analysis(item, feedback)
+          @analyses[@current] = revised
+          display_analysis(revised)
+        else
+          handle_action(action, item)
+          @current += 1
+          return :next
+        end
+      end
+    end
 
     def setup_ui
       ::CLI::UI::StdoutRouter.enable
