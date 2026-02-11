@@ -50,23 +50,24 @@ class Sift::CLI::QueueCommandTest < Minitest::Test
     exit_code = run_command([])
 
     assert_equal 0, exit_code
-    assert_match(/Usage:.*sq/i, stdout_output)
-    assert_match(/add/i, stdout_output)
-    assert_match(/list/i, stdout_output)
+    assert_includes stdout_output, "USAGE"
+    assert_includes stdout_output, "sq"
+    assert_includes stdout_output, "add"
+    assert_includes stdout_output, "list"
   end
 
   def test_shows_help_with_help_flag
     exit_code = run_command(["--help"])
 
     assert_equal 0, exit_code
-    assert_match(/Usage:/i, stdout_output)
+    assert_includes stdout_output, "USAGE"
   end
 
   def test_unknown_subcommand_returns_error
     exit_code = run_command(["unknown"])
 
     assert_equal 1, exit_code
-    assert_match(/unknown subcommand/i, stderr_output)
+    assert_match(/unknown command/i, stderr_output)
   end
 
   # --- Add subcommand tests ---

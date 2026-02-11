@@ -2,7 +2,7 @@
 
 require_relative "cli/base"
 require_relative "cli/help_renderer"
-require_relative "cli/queue"
+require_relative "cli/queue_command"
 
 module Sift
   # CLI module for command-line interface components
