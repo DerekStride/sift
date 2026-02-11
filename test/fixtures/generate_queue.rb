@@ -251,9 +251,9 @@ items << item("x02", sources: [
 items << item("x03", sources: [
   {
     type: "transcript",
-    path: File.join(FIXTURE_DIR, "review_conversation.txt"),
+    path: File.join(FIXTURE_DIR, "claude_code_conversation.jsonl"),
   },
-], metadata: { "category" => "design-review" })
+], metadata: { "category" => "real-session", "format" => "claude-code-jsonl" })
 
 # ---------- mixed-source item (bonus: shows multi-source navigation) ----------
 
