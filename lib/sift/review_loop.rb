@@ -6,9 +6,9 @@ module Sift
   class ReviewLoop
     include SourceViewer
 
-    def initialize(queue:, model: "sonnet")
+    def initialize(queue:, model: "sonnet", dry: false)
       @queue = queue
-      @client = Client.new(model: model)
+      @client = dry ? DryClient.new(model: model) : Client.new(model: model)
       @items = []
       @current = 0
       @source_index = 0

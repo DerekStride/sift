@@ -63,6 +63,19 @@ class Sift::CLI::SiftCommandTest < Minitest::Test
     assert_equal "opus", cmd.options[:model]
   end
 
+  def test_dry_flag
+    cmd = Sift::CLI::SiftCommand.new(["--dry"], stdout: @stdout, stderr: @stderr)
+    cmd.send(:build_option_parser).parse!(cmd.argv)
+
+    assert cmd.options[:dry]
+  end
+
+  def test_help_includes_dry_flag
+    run_command(["--help"])
+
+    assert_includes stdout_output, "--dry"
+  end
+
   def test_invalid_flag_returns_error
     exit_code = run_command(["--bogus"])
 

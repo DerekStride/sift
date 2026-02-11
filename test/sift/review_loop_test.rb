@@ -23,6 +23,18 @@ class Sift::ReviewLoopTest < Minitest::Test
     assert_instance_of Sift::ReviewLoop, loop
   end
 
+  def test_initializes_with_dry_mode
+    loop = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    client = loop.instance_variable_get(:@client)
+    assert_instance_of Sift::DryClient, client
+  end
+
+  def test_initializes_without_dry_mode
+    loop = Sift::ReviewLoop.new(queue: @queue)
+    client = loop.instance_variable_get(:@client)
+    assert_instance_of Sift::Client, client
+  end
+
   def test_build_analysis_prompt_with_diff_source
     @queue.push(sources: [{ type: "diff", path: "foo.rb", content: "+new line\n" }])
     loop = Sift::ReviewLoop.new(queue: @queue)

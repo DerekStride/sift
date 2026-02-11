@@ -67,4 +67,27 @@ module Sift
       raise Error, "Failed to parse Claude response: #{e.message}"
     end
   end
+
+  # No-op client for testing the review flow without API calls.
+  # Returns a canned response and echoes prompt details to stderr.
+  class DryClient
+    def initialize(model: nil, output: $stderr)
+      @model = model
+      @output = output
+    end
+
+    def prompt(text, session_id: nil)
+      @output.puts "[dry] model=#{@model || "default"} session=#{session_id || "new"}"
+      @output.puts "[dry] prompt: #{text.lines.first&.chomp}"
+      Client::Result.new(
+        response: "[dry mode] No API call made.",
+        session_id: session_id || "dry-#{SecureRandom.hex(4)}",
+        raw: {},
+      )
+    end
+
+    def analyze_diff(hunk, file:, context: nil, session_id: nil)
+      prompt("File: #{file}\nDiff:\n#{hunk}", session_id: session_id)
+    end
+  end
 end

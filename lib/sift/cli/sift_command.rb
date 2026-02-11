@@ -9,7 +9,8 @@ module Sift
       examples(
         "sift",
         "sift --queue .sift/queue.jsonl",
-        "sift --model opus"
+        "sift --model opus",
+        "sift --dry"
       )
 
       def define_flags(parser, options)
@@ -22,6 +23,9 @@ module Sift
         parser.on("-m", "--model MODEL", "Claude model (default: sonnet)") do |v|
           options[:model] = v
         end
+        parser.on("--dry", "Dry mode: skip Claude API calls, print prompts instead") do
+          options[:dry] = true
+        end
         parser.on("-v", "--version", "Show version") do
           stdout.puts "sift #{Sift::VERSION}"
           exit
@@ -31,7 +35,7 @@ module Sift
 
       def execute
         queue = Sift::Queue.new(options[:queue_path])
-        Sift::ReviewLoop.new(queue: queue, model: options[:model]).run
+        Sift::ReviewLoop.new(queue: queue, model: options[:model], dry: options[:dry]).run
         0
       end
     end
