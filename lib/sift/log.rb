@@ -29,11 +29,34 @@ module Sift
     class << self
       attr_writer :logger
 
+      # Buffer debug/info logs temporarily, flushing them when the
+      # block exits. Warnings and above still log immediately.
+      # Useful when the TUI is waiting for input and stderr output
+      # would corrupt the display.
+      def quiet
+        @buffer = []
+        yield
+      ensure
+        buf = @buffer
+        @buffer = nil
+        buf&.each { |level, msg| logger.send(level, msg) }
+      end
+
       def debug(message)
+        if @buffer
+          @buffer << [:debug, message]
+          return
+        end
+
         logger.debug(message)
       end
 
       def info(message)
+        if @buffer
+          @buffer << [:info, message]
+          return
+        end
+
         logger.info(message)
       end
 
@@ -55,6 +78,7 @@ module Sift
 
       def reset!
         @logger = nil
+        @buffer = nil
       end
 
       private

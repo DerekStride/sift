@@ -23,6 +23,10 @@ module Sift
       agent_task = @semaphore.async do
         Log.debug "agent running item=#{item_id}"
         @client.prompt(prompt_text, session_id: session_id)
+      rescue => e
+        # Rescue here so Async doesn't dump the backtrace to stderr.
+        Log.error "agent error item=#{item_id}: #{e.message}"
+        nil
       end
 
       @agents[item_id] = { task: agent_task, prompt: user_prompt, started_at: Time.now }
@@ -60,6 +64,19 @@ module Sift
     # How many agents are currently running?
     def running_count
       @agents.size
+    end
+
+    # How many tracked agents are still actively running?
+    # Unlike running_count, this checks actual task status without
+    # polling or logging — safe to call from the input loop.
+    def active_count
+      @agents.count { |_, a| !a[:task].completed? && !a[:task].failed? }
+    end
+
+    # How many tracked agents have finished (completed or failed)
+    # but haven't been poll'd yet?
+    def finished_count
+      @agents.count { |_, a| a[:task].completed? || a[:task].failed? }
     end
 
     # Stop all running agents.

@@ -4,6 +4,7 @@ require "async"
 require "cli/ui"
 require "io/console"
 require "tempfile"
+require_relative "statusline"
 
 module Sift
   class ReviewLoop
@@ -17,7 +18,11 @@ module Sift
       Sync do |task|
         setup_ui
         @agent_runner = AgentRunner.new(client: @client, task: task, limit: @concurrency)
-        main_loop
+        Statusline.with do |sl|
+          @statusline = sl
+          refresh_statusline
+          main_loop
+        end
       end
     end
 
@@ -39,7 +44,7 @@ module Sift
 
         if eligible.empty?
           display_waiting_status
-          sleep 1
+          wait_for_agents
           next
         end
 
@@ -89,8 +94,6 @@ module Sift
 
     def prompt_action(item)
       puts
-      status = status_line
-      puts ::CLI::UI.fmt(status) if status
 
       parts = [
         "[{{cyan:v}}]iew",
@@ -102,39 +105,77 @@ module Sift
       puts ::CLI::UI.fmt("{{bold:Actions:}} #{parts.join("  ")}")
       print ::CLI::UI.fmt("{{bold:Choice:}} ")
 
-      loop do
-        # Note: read_char blocks the current fiber; agent fibers won't
-        # progress while waiting for input. Acceptable for now — revisit
-        # with IO#wait_readable if needed.
-        char = ::CLI::UI::Prompt.read_char
-        case char.downcase
-        when "v"
-          puts "view"
-          return :view
-        when "a"
-          puts "agent"
-          return :agent
-        when "c"
-          puts ::CLI::UI.fmt("{{green:closed}}")
-          return :close
-        when "q"
-          puts "quit"
-          return :quit
+      read_action_char
+    end
+
+    # Non-blocking input loop. Ticks the statusline spinner every 100ms
+    # while waiting for a keypress. Does NOT call process_completed_agents —
+    # that happens when the user takes an action and the main flow resumes.
+    # Suppresses debug/info logs so $stderr doesn't corrupt the prompt.
+    def read_action_char
+      Log.quiet do
+        $stdin.raw do |io|
+          loop do
+            if io.wait_readable(0.1)
+              char = io.getc
+              next unless char
+              action = resolve_action(char.downcase)
+              return action if action
+            else
+              if @statusline&.tick
+                refresh_statusline
+              end
+            end
+          end
         end
       end
     end
 
-    def status_line
-      pending = @queue.count(status: "pending")
-      running = @agent_runner.running_count
-      return nil if running == 0
+    def resolve_action(char)
+      case char
+      when "v"
+        puts "view"
+        :view
+      when "a"
+        puts "agent"
+        :agent
+      when "c"
+        puts ::CLI::UI.fmt("{{green:closed}}")
+        :close
+      when "q"
+        puts "quit"
+        :quit
+      end
+    end
 
-      "{{gray:[#{pending} pending | #{running} running]}}"
+    def refresh_statusline
+      return unless @statusline && @agent_runner
+
+      pending = @queue.count(status: "pending")
+      active = @agent_runner.active_count
+      finished = @agent_runner.finished_count
+
+      parts = ["#{pending} pending"]
+      parts << "#{@statusline.spinner} #{active} running" if active > 0
+      parts << "#{finished} finished" if finished > 0
+
+      @statusline.update("{{gray:#{parts.join(" | ")}}}")
     end
 
     def display_waiting_status
       running = @agent_runner.running_count
       puts ::CLI::UI.fmt("\n{{gray:Waiting for #{running} agent#{"s" if running != 1}...}}")
+    end
+
+    # Tick the statusline while waiting for agents to finish.
+    # Returns after ~1s so main_loop can re-evaluate.
+    def wait_for_agents
+      10.times do # ~1 second total (10 × 0.1s)
+        if @statusline&.tick
+          refresh_statusline
+        end
+        sleep 0.1
+      end
     end
 
     def handle_view(item)
@@ -150,11 +191,13 @@ module Sift
 
       prompt_text = build_agent_prompt(item, user_prompt)
       @agent_runner.spawn(item.id, prompt_text, user_prompt, session_id: item.session_id)
+      refresh_statusline
       puts ::CLI::UI.fmt("{{blue:Agent started in background}}")
     end
 
     def process_completed_agents
       completed = @agent_runner.poll
+      refresh_statusline unless completed.empty?
       completed.each do |item_id, data|
         result = data[:result]
         user_prompt = data[:prompt]
@@ -181,6 +224,7 @@ module Sift
 
     def handle_close(item)
       @queue.update(item.id, status: "closed")
+      refresh_statusline
     end
 
     def read_agent_prompt
