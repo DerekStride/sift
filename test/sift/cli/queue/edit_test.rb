@@ -8,12 +8,12 @@ class Sift::CLI::Queue::EditTest < Minitest::Test
   def test_edit_set_status
     item = queue.push(sources: [{ type: "text", content: "test" }])
 
-    exit_code = run_command(["edit", item.id, "--set-status", "approved"])
+    exit_code = run_command(["edit", item.id, "--set-status", "closed"])
 
     assert_equal 0, exit_code
 
     updated = queue.find(item.id)
-    assert_equal "approved", updated.status
+    assert_equal "closed", updated.status
   end
 
   def test_edit_set_status_to_all_valid_statuses
@@ -40,14 +40,14 @@ class Sift::CLI::Queue::EditTest < Minitest::Test
   end
 
   def test_edit_nonexistent_item_returns_error
-    exit_code = run_command(["edit", "xyz", "--set-status", "approved"])
+    exit_code = run_command(["edit", "xyz", "--set-status", "closed"])
 
     assert_equal 1, exit_code
     assert_match(/not found/i, stderr_output)
   end
 
   def test_edit_without_id_returns_error
-    exit_code = run_command(["edit", "--set-status", "approved"])
+    exit_code = run_command(["edit", "--set-status", "closed"])
 
     assert_equal 1, exit_code
     assert_match(/id.*required/i, stderr_output)

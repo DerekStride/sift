@@ -13,7 +13,7 @@ module Sift
     VALID_SOURCE_TYPES = %w[diff file transcript text].freeze
 
     # Valid status values
-    VALID_STATUSES = %w[pending in_progress approved rejected failed].freeze
+    VALID_STATUSES = %w[pending in_progress closed].freeze
 
     # Represents a source of content for review
     Source = Struct.new(:type, :path, :content, :session_id, keyword_init: true) do
@@ -78,16 +78,8 @@ module Sift
         status == "in_progress"
       end
 
-      def approved?
-        status == "approved"
-      end
-
-      def rejected?
-        status == "rejected"
-      end
-
-      def failed?
-        status == "failed"
+      def closed?
+        status == "closed"
       end
     end
 

@@ -18,7 +18,7 @@ class Sift::CLI::Queue::ListTest < Minitest::Test
   def test_list_with_status_filter
     queue.push(sources: [{ type: "text", content: "1" }])
     item2 = queue.push(sources: [{ type: "text", content: "2" }])
-    queue.update(item2.id, status: "approved")
+    queue.update(item2.id, status: "closed")
 
     exit_code = run_command(["list", "--status", "pending"])
 

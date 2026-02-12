@@ -8,7 +8,7 @@ module Sift
       class Edit < Base
         command_name "edit"
         summary "Edit an existing queue item"
-        examples "sq edit <id> --set-status approved"
+        examples "sq edit <id> --set-status closed"
 
         def define_flags(parser, options)
           options[:add_sources] ||= []

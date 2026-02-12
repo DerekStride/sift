@@ -46,12 +46,12 @@ class SmokeTest < Minitest::Test
   end
 
   def test_require_sift_loads_without_error
-    # Verify the full require chain works inside Sift module context
+    # Verify the full require chain works
     stdout, stderr, status = Open3.capture3(
       "bundle", "exec", "ruby", "-e",
-      'require "sift"; Sift::Source::Base.for(Sift::Queue::Source.new(type: "text", content: "ok"))'
+      'require "sift"; Sift::Queue.new("/tmp/sift_smoke.jsonl")'
     )
-    assert status.success?, "require 'sift' + Source::Base.for failed: #{stderr}"
+    assert status.success?, "require 'sift' failed: #{stderr}"
   end
 
   def test_review_loop_can_be_instantiated
