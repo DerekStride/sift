@@ -125,4 +125,25 @@ class Sift::AgentRunnerTest < Minitest::Test
       assert_equal "You are a reviewer.", received_system_prompt
     end
   end
+
+  def test_poll_returns_error_when_client_raises
+    error_client = Object.new
+    error_client.define_singleton_method(:prompt) do |text, session_id: nil, system_prompt: nil|
+      raise Sift::Client::Error, "No conversation found with session ID: abc-123"
+    end
+
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: error_client, task: task)
+      runner.spawn("abc", "prompt", "user", session_id: "abc-123")
+
+      task.yield
+
+      completed = runner.poll
+      assert_equal 1, completed.size
+      assert_nil completed["abc"][:result]
+      assert_includes completed["abc"][:error], "No conversation found"
+      assert_equal "user", completed["abc"][:prompt]
+      refute runner.running?("abc")
+    end
+  end
 end

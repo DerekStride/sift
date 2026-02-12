@@ -6,6 +6,9 @@ require "minitest/reporters"
 
 Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: true)]
 
+# Suppress warn/info/debug logs during tests (override with SIFT_LOG_LEVEL=DEBUG)
+ENV["SIFT_LOG_LEVEL"] ||= "ERROR"
+
 # Load the gem
 require "sift"
 require "sift/cli"
