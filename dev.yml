@@ -1,0 +1,17 @@
+name: sift
+
+type: ruby
+
+up:
+  - ruby
+  - bundler
+
+commands:
+  build: echo "noop" > /dev/null
+  run-built: bundle exec exe/sift $@
+  sift: bundle exec exe/sift $@
+  sq: bundle exec exe/sq $@
+  test: bundle exec rake test
+
+check:
+  test: bundle exec rake test
