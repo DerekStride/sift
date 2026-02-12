@@ -34,8 +34,8 @@ module Sift
         parser.on("--dry", "Dry mode: skip Claude API calls, print prompts instead") do
           options[:dry] = true
         end
-        parser.on("-v", "--version", "Show version") do
-          stdout.puts "sift #{Sift::VERSION}"
+        parser.on("--version", "Show version") do
+          puts "sift #{Sift::VERSION}"
           exit
         end
         super
@@ -60,7 +60,7 @@ module Sift
         return nil unless path
 
         unless File.exist?(path)
-          stderr.puts "Error: system prompt file not found: #{path}"
+          logger.error("system prompt file not found: #{path}")
           exit 1
         end
 

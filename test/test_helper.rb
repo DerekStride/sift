@@ -37,9 +37,4 @@ module TestHelpers
     dir ||= create_temp_dir
     File.join(dir, "queue.jsonl")
   end
-
-  # Create a StringIO with the given content for stdin simulation
-  def stdin_with(content)
-    StringIO.new(content)
-  end
 end
