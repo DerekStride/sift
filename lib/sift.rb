@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "sift/version"
+require_relative "sift/log"
 require_relative "sift/client"
 require_relative "sift/diff_parser"
 require_relative "sift/git_actions"

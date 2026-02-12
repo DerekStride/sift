@@ -91,7 +91,7 @@ module Sift
 
           updated = queue.update(id, **attrs)
           stdout.puts updated.id
-          logger.info "Updated item #{updated.id}"
+          Sift::Log.info "Updated item #{updated.id}"
           0
         end
 

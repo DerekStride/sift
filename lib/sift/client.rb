@@ -69,16 +69,15 @@ module Sift
   end
 
   # No-op client for testing the review flow without API calls.
-  # Returns a canned response and echoes prompt details to stderr.
+  # Returns a canned response and logs prompt details via Sift::Log.
   class DryClient
-    def initialize(model: nil, output: $stderr)
+    def initialize(model: nil)
       @model = model
-      @output = output
     end
 
     def prompt(text, session_id: nil)
-      @output.puts "[dry] model=#{@model || "default"} session=#{session_id || "new"}"
-      @output.puts "[dry] prompt: #{text.lines.first&.chomp}"
+      Sift::Log.debug "[dry] model=#{@model || "default"} session=#{session_id || "new"}"
+      Sift::Log.debug "[dry] prompt: #{text.lines.first&.chomp}"
       Client::Result.new(
         response: "[dry mode] No API call made.",
         session_id: session_id || "dry-#{SecureRandom.hex(4)}",

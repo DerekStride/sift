@@ -14,9 +14,9 @@ class Sift::CLI::Queue::ShowTest < Minitest::Test
     exit_code = run_command(["show", item.id])
 
     assert_equal 0, exit_code
-    assert_match(/pending/i, stdout_output)
-    assert_match(/key.*value/i, stdout_output)
-    assert_match(/text/i, stdout_output)
+    assert_match(/pending/i, @stdout)
+    assert_match(/key.*value/i, @stdout)
+    assert_match(/text/i, @stdout)
   end
 
   def test_show_json_output
@@ -29,7 +29,7 @@ class Sift::CLI::Queue::ShowTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    data = JSON.parse(stdout_output)
+    data = JSON.parse(@stdout)
     assert_equal item.id, data["id"]
     assert_equal "pending", data["status"]
     assert_equal 1, data["sources"].length
@@ -41,13 +41,13 @@ class Sift::CLI::Queue::ShowTest < Minitest::Test
     exit_code = run_command(["show", "xyz"])
 
     assert_equal 1, exit_code
-    assert_match(/not found/i, stderr_output)
+    assert_match(/not found/i, @stderr)
   end
 
   def test_show_without_id_returns_error
     exit_code = run_command(["show"])
 
     assert_equal 1, exit_code
-    assert_match(/id.*required/i, stderr_output)
+    assert_match(/id.*required/i, @stderr)
   end
 end

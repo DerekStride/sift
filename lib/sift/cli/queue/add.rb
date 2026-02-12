@@ -60,7 +60,7 @@ module Sift
 
           item = queue.push(sources: options[:sources], metadata: options[:metadata])
           stdout.puts item.id
-          logger.info "Added item #{item.id} with #{item.sources.length} source(s)"
+          Sift::Log.info "Added item #{item.id} with #{item.sources.length} source(s)"
           0
         end
 

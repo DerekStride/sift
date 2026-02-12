@@ -12,7 +12,7 @@ class Sift::CLI::Queue::ListTest < Minitest::Test
     exit_code = run_command(["list"])
 
     assert_equal 0, exit_code
-    assert_match(/2 item/, stderr_output)
+    assert_match(/2 item/, @stderr)
   end
 
   def test_list_with_status_filter
@@ -23,8 +23,8 @@ class Sift::CLI::Queue::ListTest < Minitest::Test
     exit_code = run_command(["list", "--status", "pending"])
 
     assert_equal 0, exit_code
-    assert_match(/1 item/, stderr_output)
-    refute_match(/#{item2.id}/, stdout_output)
+    assert_match(/1 item/, @stderr)
+    refute_match(/#{item2.id}/, @stdout)
   end
 
   def test_list_json_output
@@ -35,7 +35,7 @@ class Sift::CLI::Queue::ListTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    data = JSON.parse(stdout_output)
+    data = JSON.parse(@stdout)
     assert_equal 2, data.length
     ids = data.map { |d| d["id"] }
     assert_includes ids, item1.id
@@ -46,14 +46,14 @@ class Sift::CLI::Queue::ListTest < Minitest::Test
     exit_code = run_command(["list"])
 
     assert_equal 0, exit_code
-    assert_match(/no items/i, stderr_output)
+    assert_match(/no items/i, @stderr)
   end
 
   def test_list_json_empty
     exit_code = run_command(["list", "--json"])
 
     assert_equal 0, exit_code
-    data = JSON.parse(stdout_output)
+    data = JSON.parse(@stdout)
     assert_empty data
   end
 end
