@@ -10,7 +10,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     assert_match(/\A[a-z0-9]{3}\z/, id)
 
     item = queue.find(id)
@@ -25,7 +25,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "file", item.sources.first.type
     assert_equal "/path/to/code.rb", item.sources.first.path
@@ -36,7 +36,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "diff", item.sources.first.type
     assert_equal "/changes.patch", item.sources.first.path
@@ -47,7 +47,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "transcript", item.sources.first.type
     assert_equal "/chat.log", item.sources.first.path
@@ -59,7 +59,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "text", item.sources.first.type
     assert_equal content, item.sources.first.content
@@ -71,7 +71,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "diff", item.sources.first.type
     assert_equal diff_content, item.sources.first.content
@@ -87,7 +87,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal 3, item.sources.length
     assert_equal "text", item.sources[0].type
@@ -104,7 +104,7 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
 
     assert_equal 0, exit_code
 
-    id = stdout_output.lines.first.strip
+    id = @stdout.lines.first.strip
     item = queue.find(id)
     assert_equal "analyze", item.metadata["workflow"]
     assert_equal 1, item.metadata["priority"]
@@ -144,14 +144,14 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
     exit_code = run_command(["add"])
 
     assert_equal 1, exit_code
-    assert_match(/at least one source/i, stderr_output)
+    assert_match(/at least one source/i, @stderr)
   end
 
   def test_add_with_invalid_stdin_type_returns_error
     exit_code = run_command(["add", "--stdin", "invalid"], stdin_content: "test")
 
     assert_equal 1, exit_code
-    assert_match(/invalid argument/i, stderr_output)
+    assert_match(/invalid argument/i, @stderr)
   end
 
   def test_add_with_invalid_metadata_json_returns_error
@@ -162,6 +162,6 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
     ])
 
     assert_equal 1, exit_code
-    assert_match(/invalid.*json/i, stderr_output)
+    assert_match(/invalid.*json/i, @stderr)
   end
 end

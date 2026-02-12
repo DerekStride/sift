@@ -86,9 +86,7 @@ module Sift
             case status
             when "pending" then "{{yellow:#{status}}}"
             when "in_progress" then "{{blue:#{status}}}"
-            when "approved" then "{{green:#{status}}}"
-            when "rejected" then "{{red:#{status}}}"
-            when "failed" then "{{red:#{status}}}"
+            when "closed" then "{{green:#{status}}}"
             else "{{gray:#{status}}}"
             end
           else

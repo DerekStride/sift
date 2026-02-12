@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "optparse"
-require "logger"
 
 module Sift
   module CLI
@@ -36,7 +35,7 @@ module Sift
         end
       end
 
-      attr_reader :argv, :options, :stdin, :stdout, :stderr, :logger, :parent
+      attr_reader :argv, :options, :stdin, :stdout, :stderr, :parent
 
       def initialize(argv, parent: nil, stdin: $stdin, stdout: $stdout, stderr: $stderr)
         @argv = argv.dup
@@ -45,8 +44,6 @@ module Sift
         @stdin = stdin
         @stdout = stdout
         @stderr = stderr
-        @logger = Logger.new(@stderr, level: Logger::INFO)
-        @logger.formatter = proc { |_sev, _dt, _prog, msg| "#{msg}\n" }
       end
 
       def run

@@ -13,6 +13,16 @@ require "sift/cli"
 # Add test directory to load path
 $LOAD_PATH.unshift File.expand_path(".", __dir__)
 
+def with_log_level(level)
+  Sift::Log.reset!
+  original = ENV["SIFT_LOG_LEVEL"]
+  ENV["SIFT_LOG_LEVEL"] = level
+  yield
+ensure
+  ENV["SIFT_LOG_LEVEL"] = original
+  Sift::Log.reset!
+end
+
 module TestHelpers
   # Create a temporary directory for test files
   def create_temp_dir

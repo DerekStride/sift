@@ -18,7 +18,7 @@ module Sift
           removed = queue.remove(id)
           if removed
             stdout.puts removed.id
-            logger.info "Removed item #{removed.id}"
+            Sift::Log.info "Removed item #{removed.id}"
             0
           else
             stderr.puts "Error: Item not found: #{id}"

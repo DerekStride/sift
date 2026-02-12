@@ -32,10 +32,10 @@ module Sift
             stdout.puts JSON.pretty_generate(items.map(&:to_h))
           else
             if items.empty?
-              logger.info "No items found"
+              Sift::Log.info "No items found"
             else
               items.each { |item| print_item_summary(item) }
-              logger.info "#{items.length} item(s)"
+              Sift::Log.info "#{items.length} item(s)"
             end
           end
 

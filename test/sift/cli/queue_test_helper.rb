@@ -14,8 +14,6 @@ module QueueTestHelper
   def setup
     @temp_dir = create_temp_dir
     @queue_path = File.join(@temp_dir, "queue.jsonl")
-    @stdout = StringIO.new
-    @stderr = StringIO.new
   end
 
   def teardown
@@ -24,25 +22,21 @@ module QueueTestHelper
 
   def run_command(args, stdin_content: nil)
     stdin = stdin_content ? StringIO.new(stdin_content) : StringIO.new
-    cmd = Sift::CLI::QueueCommand.new(
-      args,
-      queue_path: @queue_path,
-      stdin: stdin,
-      stdout: @stdout,
-      stderr: @stderr,
-    )
-    cmd.run
+    exit_code = nil
+    @stdout, @stderr = capture_io do
+      Sift::Log.reset!
+      cmd = Sift::CLI::QueueCommand.new(
+        args,
+        queue_path: @queue_path,
+        stdin: stdin,
+      )
+      exit_code = cmd.run
+    end
+    Sift::Log.reset!
+    exit_code
   end
 
   def queue
     @queue ||= Sift::Queue.new(@queue_path)
-  end
-
-  def stdout_output
-    @stdout.string
-  end
-
-  def stderr_output
-    @stderr.string
   end
 end

@@ -86,7 +86,7 @@ class Sift::QueueTest < Minitest::Test
   def test_item_from_h_with_string_keys
     hash = {
       "id" => "xyz",
-      "status" => "approved",
+      "status" => "closed",
       "sources" => [{ "type" => "file", "path" => "/test.rb" }],
       "metadata" => { "foo" => "bar" },
       "session_id" => "s1",
@@ -96,7 +96,7 @@ class Sift::QueueTest < Minitest::Test
 
     item = Sift::Queue::Item.from_h(hash)
     assert_equal "xyz", item.id
-    assert_equal "approved", item.status
+    assert_equal "closed", item.status
     assert_equal 1, item.sources.length
     assert_equal "file", item.sources.first.type
     assert_equal({ "foo" => "bar" }, item.metadata)
@@ -111,14 +111,8 @@ class Sift::QueueTest < Minitest::Test
     assert item.in_progress?
     refute item.pending?
 
-    item = Sift::Queue::Item.new(id: "3", status: "approved", sources: [])
-    assert item.approved?
-
-    item = Sift::Queue::Item.new(id: "4", status: "rejected", sources: [])
-    assert item.rejected?
-
-    item = Sift::Queue::Item.new(id: "5", status: "failed", sources: [])
-    assert item.failed?
+    item = Sift::Queue::Item.new(id: "3", status: "closed", sources: [])
+    assert item.closed?
   end
 
   # --- push tests ---
@@ -221,13 +215,13 @@ class Sift::QueueTest < Minitest::Test
     original_updated = item.updated_at
 
     sleep 1.1 # ensure time difference (iso8601 has second precision)
-    updated = @queue.update(item.id, status: "approved")
+    updated = @queue.update(item.id, status: "closed")
 
     refute_equal original_updated, updated.updated_at
   end
 
   def test_update_returns_nil_for_nonexistent_id
-    result = @queue.update("nonexistent", status: "approved")
+    result = @queue.update("nonexistent", status: "closed")
     assert_nil result
   end
 
@@ -236,15 +230,15 @@ class Sift::QueueTest < Minitest::Test
   def test_filter_by_status
     @queue.push(sources: [{ type: "text", content: "1" }])
     item2 = @queue.push(sources: [{ type: "text", content: "2" }])
-    @queue.update(item2.id, status: "approved")
+    @queue.update(item2.id, status: "closed")
     @queue.push(sources: [{ type: "text", content: "3" }])
 
     pending = @queue.filter(status: "pending")
-    approved = @queue.filter(status: "approved")
+    closed = @queue.filter(status: "closed")
 
     assert_equal 2, pending.length
-    assert_equal 1, approved.length
-    assert_equal item2.id, approved.first.id
+    assert_equal 1, closed.length
+    assert_equal item2.id, closed.first.id
   end
 
   def test_filter_without_status_returns_all
@@ -256,10 +250,10 @@ class Sift::QueueTest < Minitest::Test
 
   def test_filter_with_symbol_status
     item = @queue.push(sources: [{ type: "text", content: "test" }])
-    @queue.update(item.id, status: "rejected")
+    @queue.update(item.id, status: "closed")
 
-    rejected = @queue.filter(status: :rejected)
-    assert_equal 1, rejected.length
+    closed = @queue.filter(status: :closed)
+    assert_equal 1, closed.length
   end
 
   # --- each_pending tests ---
@@ -267,7 +261,7 @@ class Sift::QueueTest < Minitest::Test
   def test_each_pending_iterates_over_pending_items
     @queue.push(sources: [{ type: "text", content: "1" }])
     item2 = @queue.push(sources: [{ type: "text", content: "2" }])
-    @queue.update(item2.id, status: "approved")
+    @queue.update(item2.id, status: "closed")
     @queue.push(sources: [{ type: "text", content: "3" }])
 
     pending_ids = []
@@ -287,11 +281,10 @@ class Sift::QueueTest < Minitest::Test
   def test_count_with_status_filter
     @queue.push(sources: [{ type: "text", content: "1" }])
     item2 = @queue.push(sources: [{ type: "text", content: "2" }])
-    @queue.update(item2.id, status: "approved")
+    @queue.update(item2.id, status: "closed")
 
     assert_equal 1, @queue.count(status: "pending")
-    assert_equal 1, @queue.count(status: "approved")
-    assert_equal 0, @queue.count(status: "rejected")
+    assert_equal 1, @queue.count(status: "closed")
   end
 
   # --- remove tests ---
@@ -394,12 +387,12 @@ class Sift::QueueTest < Minitest::Test
 
   def test_persistence_handles_updates
     item = @queue.push(sources: [{ type: "text", content: "test" }])
-    @queue.update(item.id, status: "approved")
+    @queue.update(item.id, status: "closed")
 
     new_queue = Sift::Queue.new(@queue_path)
     found = new_queue.find(item.id)
 
-    assert_equal "approved", found.status
+    assert_equal "closed", found.status
   end
 
   def test_all_returns_empty_array_when_file_not_exists

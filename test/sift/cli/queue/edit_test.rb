@@ -8,20 +8,17 @@ class Sift::CLI::Queue::EditTest < Minitest::Test
   def test_edit_set_status
     item = queue.push(sources: [{ type: "text", content: "test" }])
 
-    exit_code = run_command(["edit", item.id, "--set-status", "approved"])
+    exit_code = run_command(["edit", item.id, "--set-status", "closed"])
 
     assert_equal 0, exit_code
 
     updated = queue.find(item.id)
-    assert_equal "approved", updated.status
+    assert_equal "closed", updated.status
   end
 
   def test_edit_set_status_to_all_valid_statuses
     Sift::Queue::VALID_STATUSES.each do |status|
       item = queue.push(sources: [{ type: "text", content: status }])
-
-      @stdout = StringIO.new
-      @stderr = StringIO.new
 
       exit_code = run_command(["edit", item.id, "--set-status", status])
 
@@ -36,21 +33,21 @@ class Sift::CLI::Queue::EditTest < Minitest::Test
     exit_code = run_command(["edit", item.id, "--set-status", "invalid"])
 
     assert_equal 1, exit_code
-    assert_match(/invalid argument/i, stderr_output)
+    assert_match(/invalid argument/i, @stderr)
   end
 
   def test_edit_nonexistent_item_returns_error
-    exit_code = run_command(["edit", "xyz", "--set-status", "approved"])
+    exit_code = run_command(["edit", "xyz", "--set-status", "closed"])
 
     assert_equal 1, exit_code
-    assert_match(/not found/i, stderr_output)
+    assert_match(/not found/i, @stderr)
   end
 
   def test_edit_without_id_returns_error
-    exit_code = run_command(["edit", "--set-status", "approved"])
+    exit_code = run_command(["edit", "--set-status", "closed"])
 
     assert_equal 1, exit_code
-    assert_match(/id.*required/i, stderr_output)
+    assert_match(/id.*required/i, @stderr)
   end
 
   def test_edit_set_system_prompt
@@ -101,6 +98,6 @@ class Sift::CLI::Queue::EditTest < Minitest::Test
     exit_code = run_command(["edit", item.id])
 
     assert_equal 1, exit_code
-    assert_match(/no changes/i, stderr_output)
+    assert_match(/no changes/i, @stderr)
   end
 end
