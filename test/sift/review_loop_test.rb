@@ -292,7 +292,81 @@ class Sift::ReviewLoopTest < Minitest::Test
     end
   end
 
+  # --- general agent key binding ---
+
+  def test_review_item_loops_back_on_general
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    item = @queue.all.first
+
+    Sync do |task|
+      rl.instance_variable_set(:@agent_runner, Sift::AgentRunner.new(client: Sift::DryClient.new, task: task))
+
+      # g triggers general (loops back), then q quits — item is unaffected
+      call_count = 0
+      stub_read_char("g", "q") do
+        $stdin.stub(:getch, -> {
+          call_count += 1
+          "\r" # just press enter with empty prompt → no-op
+        }) do
+          result = nil
+          capture_cli_ui_output do
+            result = rl.send(:review_item, item, position: 1, total: 1)
+          end
+          assert_equal :quit, result
+        end
+      end
+    end
+  end
+
   # --- process_completed_agents tests ---
+
+  def test_process_completed_general_agent_creates_new_item
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      rl.instance_variable_set(:@agent_runner, runner)
+
+      runner.spawn_general("explore the CLI", "explore the CLI")
+      task.yield
+
+      capture_cli_ui_output { rl.send(:process_completed_agents) }
+
+      items = @queue.filter(status: "pending")
+      assert_equal 1, items.size
+
+      new_item = items.first
+      assert_equal "transcript", new_item.sources.first.type
+      assert_includes new_item.sources.first.content, "explore the CLI"
+      assert_equal "general_agent", new_item.metadata["source"]
+      assert_equal "explore the CLI", new_item.metadata["prompt"]
+      assert new_item.session_id
+    end
+  end
+
+  def test_process_completed_general_agent_error_does_not_create_item
+    error_client = Object.new
+    error_client.define_singleton_method(:prompt) do |text, session_id: nil, system_prompt: nil|
+      raise Sift::Client::Error, "API error"
+    end
+
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: error_client, task: task)
+      rl.instance_variable_set(:@agent_runner, runner)
+
+      runner.spawn_general("bad prompt", "bad prompt")
+      task.yield
+
+      output = capture_cli_ui_output { rl.send(:process_completed_agents) }
+
+      # No new items created
+      assert_equal 0, @queue.count
+      assert_includes output, "General agent failed"
+    end
+  end
 
   def test_process_completed_agents_records_error_on_item
     error_client = Object.new

@@ -40,8 +40,8 @@ module Sift
         break if eligible.empty? && @agent_runner.running_count == 0
 
         if eligible.empty?
-          display_waiting_status
-          sleep 1
+          action = wait_with_input
+          return if action == :quit
           next
         end
 
@@ -76,6 +76,8 @@ module Sift
         when :agent
           handle_agent(item)
           return :acted
+        when :general
+          handle_general_agent
         when :close
           handle_close(item)
           return :acted
@@ -116,6 +118,7 @@ module Sift
         "[{{cyan:v}}]iew",
         "[{{blue:a}}]gent",
         "[{{green:c}}]lose",
+        "[{{magenta:g}}]eneral",
       ]
       parts << "[{{yellow:n}}]ext  [{{yellow:p}}]rev" if show_nav
       parts << "[{{gray:q}}]uit"
@@ -138,6 +141,9 @@ module Sift
         when "c"
           puts ::CLI::UI.fmt("{{green:closed}}")
           return :close
+        when "g"
+          puts "general"
+          return :general
         when "n"
           puts "next" if show_nav
           return :next if show_nav
@@ -159,14 +165,39 @@ module Sift
       "{{gray:[#{pending} pending | #{running} running]}}"
     end
 
-    def display_waiting_status
+    def wait_with_input
       running = @agent_runner.running_count
       puts ::CLI::UI.fmt("\n{{gray:Waiting for #{running} agent#{"s" if running != 1}...}}")
+      puts ::CLI::UI.fmt("{{bold:Actions:}} [{{magenta:g}}]eneral  [{{gray:q}}]uit")
+      print ::CLI::UI.fmt("{{bold:Choice:}} ")
+
+      ready = IO.select([$stdin], nil, nil, 1)
+      return nil unless ready
+
+      char = $stdin.getch
+      case char.downcase
+      when "g"
+        puts "general"
+        handle_general_agent
+        nil
+      when "q"
+        puts "quit"
+        :quit
+      end
     end
 
     def handle_view(item)
       editor = Editor.new(sources: item.sources, item_id: item.id)
       editor.open
+    end
+
+    def handle_general_agent
+      print ::CLI::UI.fmt("{{bold:Prompt}} {{gray:(Ctrl-G for editor):}} ")
+      user_prompt = read_agent_prompt
+      return if user_prompt.nil? || user_prompt.strip.empty?
+
+      @agent_runner.spawn_general(user_prompt, user_prompt)
+      puts ::CLI::UI.fmt("{{magenta:General agent started in background}}")
     end
 
     def handle_agent(item)
@@ -185,38 +216,66 @@ module Sift
     def process_completed_agents
       completed = @agent_runner.poll
       completed.each do |item_id, data|
-        result = data[:result]
-        error = data[:error]
-        user_prompt = data[:prompt]
-
-        if result
-          content = SessionTranscript.render(result.session_id) ||
-            "User: #{user_prompt}\n\nAssistant: #{result.response}"
-
-          transcript_source = Queue::Source.new(
-            type: "transcript",
-            content: content,
-          )
-          item = @queue.find(item_id)
-          next unless item
-
-          updated_sources = item.sources + [transcript_source]
-          @queue.update(item_id, sources: updated_sources, session_id: result.session_id)
-          puts ::CLI::UI.fmt("\n{{blue:Agent finished for item #{item_id}}}")
+        if data[:general]
+          process_completed_general_agent(item_id, data)
         else
-          item = @queue.find(item_id)
-          if item
-            error_entry = {
-              "message" => error || "Unknown error",
-              "prompt" => user_prompt,
-              "timestamp" => Time.now.utc.iso8601,
-            }
-            errors = (item.errors || []) + [error_entry]
-            @queue.update(item_id, errors: errors)
-          end
-          Log.warn "agent failed item=#{item_id}: #{error}"
-          puts ::CLI::UI.fmt("\n{{red:Agent failed for item #{item_id}: #{error}}}")
+          process_completed_item_agent(item_id, data)
         end
+      end
+    end
+
+    def process_completed_item_agent(item_id, data)
+      result = data[:result]
+      error = data[:error]
+      user_prompt = data[:prompt]
+
+      if result
+        content = SessionTranscript.render(result.session_id) ||
+          "User: #{user_prompt}\n\nAssistant: #{result.response}"
+
+        transcript_source = Queue::Source.new(
+          type: "transcript",
+          content: content,
+        )
+        item = @queue.find(item_id)
+        return unless item
+
+        updated_sources = item.sources + [transcript_source]
+        @queue.update(item_id, sources: updated_sources, session_id: result.session_id)
+        puts ::CLI::UI.fmt("\n{{blue:Agent finished for item #{item_id}}}")
+      else
+        item = @queue.find(item_id)
+        if item
+          error_entry = {
+            "message" => error || "Unknown error",
+            "prompt" => user_prompt,
+            "timestamp" => Time.now.utc.iso8601,
+          }
+          errors = (item.errors || []) + [error_entry]
+          @queue.update(item_id, errors: errors)
+        end
+        Log.warn "agent failed item=#{item_id}: #{error}"
+        puts ::CLI::UI.fmt("\n{{red:Agent failed for item #{item_id}: #{error}}}")
+      end
+    end
+
+    def process_completed_general_agent(key, data)
+      result = data[:result]
+      error = data[:error]
+      user_prompt = data[:prompt]
+
+      if result
+        content = SessionTranscript.render(result.session_id) ||
+          "User: #{user_prompt}\n\nAssistant: #{result.response}"
+
+        transcript_source = { type: "transcript", content: content }
+        metadata = { "source" => "general_agent", "prompt" => user_prompt }
+
+        @queue.push(sources: [transcript_source], metadata: metadata, session_id: result.session_id)
+        puts ::CLI::UI.fmt("\n{{magenta:General agent finished — new item added to queue}}")
+      else
+        Log.warn "general agent failed key=#{key}: #{error}"
+        puts ::CLI::UI.fmt("\n{{red:General agent failed: #{error}}}")
       end
     end
 

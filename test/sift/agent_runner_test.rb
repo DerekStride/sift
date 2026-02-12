@@ -126,6 +126,72 @@ class Sift::AgentRunnerTest < Minitest::Test
     end
   end
 
+  # --- spawn_general tests ---
+
+  def test_spawn_general_tracks_agent
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      runner.spawn_general("prompt text", "user prompt")
+
+      assert runner.running?("_gen_001")
+      assert_equal 1, runner.running_count
+      assert_equal 1, runner.general_running_count
+    end
+  end
+
+  def test_spawn_general_increments_counter
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      runner.spawn_general("prompt 1", "user 1")
+      runner.spawn_general("prompt 2", "user 2")
+
+      assert runner.running?("_gen_001")
+      assert runner.running?("_gen_002")
+      assert_equal 2, runner.general_running_count
+    end
+  end
+
+  def test_poll_returns_general_flag
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      runner.spawn_general("prompt text", "user prompt")
+
+      task.yield
+
+      completed = runner.poll
+      assert_equal 1, completed.size
+      assert completed.key?("_gen_001")
+      assert_equal true, completed["_gen_001"][:general]
+      assert_equal "user prompt", completed["_gen_001"][:prompt]
+      assert_instance_of Sift::Client::Result, completed["_gen_001"][:result]
+    end
+  end
+
+  def test_poll_item_agent_has_false_general
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      runner.spawn("abc", "prompt text", "user prompt")
+
+      task.yield
+
+      completed = runner.poll
+      assert_equal false, completed["abc"][:general]
+    end
+  end
+
+  def test_general_running_count_with_mixed_agents
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
+      runner.spawn("abc", "prompt", "user")
+      runner.spawn_general("prompt", "user")
+      runner.spawn("def", "prompt", "user")
+      runner.spawn_general("prompt", "user")
+
+      assert_equal 4, runner.running_count
+      assert_equal 2, runner.general_running_count
+    end
+  end
+
   def test_poll_returns_error_when_client_raises
     error_client = Object.new
     error_client.define_singleton_method(:prompt) do |text, session_id: nil, system_prompt: nil|
