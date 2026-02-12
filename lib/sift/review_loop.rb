@@ -29,6 +29,8 @@ module Sift
     end
 
     def main_loop
+      index = 0
+
       loop do
         process_completed_agents
 
@@ -43,28 +45,44 @@ module Sift
           next
         end
 
-        eligible.each do |item|
-          result = review_item(item)
-          return if result == :quit
+        index = index.clamp(0, eligible.size - 1)
+        item = eligible[index]
+        result = review_item(item, position: index + 1, total: eligible.size)
+
+        case result
+        when :quit
+          return
+        when :next
+          index += 1
+          index = 0 if index >= eligible.size
+        when :prev
+          index -= 1
+          index = eligible.size - 1 if index < 0
+        when :acted
+          # Item was closed/agent started — stay at same index (next item slides in)
         end
       end
     end
 
-    def review_item(item)
+    def review_item(item, position: nil, total: nil)
       loop do
         process_completed_agents
-        display_card(item)
-        action = prompt_action(item)
+        display_card(item, position: position, total: total)
+        action = prompt_action(item, show_nav: total && total > 1)
 
         case action
         when :view
           handle_view(item)
         when :agent
           handle_agent(item)
-          return :next
+          return :acted
         when :close
           handle_close(item)
+          return :acted
+        when :next
           return :next
+        when :prev
+          return :prev
         when :quit
           process_completed_agents
           @agent_runner.stop_all
@@ -73,9 +91,11 @@ module Sift
       end
     end
 
-    def display_card(item)
+    def display_card(item, position: nil, total: nil)
       puts
-      ::CLI::UI::Frame.open("{{bold:Item #{item.id}}}", color: :blue) do
+      title = "{{bold:Item #{item.id}}}"
+      title += " {{gray:[#{position}/#{total}]}}" if position && total
+      ::CLI::UI::Frame.open(title, color: :blue) do
         grouped = item.sources.group_by(&:type)
         grouped.each do |type, sources|
           puts ::CLI::UI.fmt("  {{yellow:#{type}}}")
@@ -87,7 +107,7 @@ module Sift
       end
     end
 
-    def prompt_action(item)
+    def prompt_action(item, show_nav: false)
       puts
       status = status_line
       puts ::CLI::UI.fmt(status) if status
@@ -96,8 +116,9 @@ module Sift
         "[{{cyan:v}}]iew",
         "[{{blue:a}}]gent",
         "[{{green:c}}]lose",
-        "[{{gray:q}}]uit",
       ]
+      parts << "[{{yellow:n}}]ext  [{{yellow:p}}]rev" if show_nav
+      parts << "[{{gray:q}}]uit"
 
       puts ::CLI::UI.fmt("{{bold:Actions:}} #{parts.join("  ")}")
       print ::CLI::UI.fmt("{{bold:Choice:}} ")
@@ -117,6 +138,12 @@ module Sift
         when "c"
           puts ::CLI::UI.fmt("{{green:closed}}")
           return :close
+        when "n"
+          puts "next" if show_nav
+          return :next if show_nav
+        when "p"
+          puts "prev" if show_nav
+          return :prev if show_nav
         when "q"
           puts "quit"
           return :quit

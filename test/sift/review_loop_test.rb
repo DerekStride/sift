@@ -150,6 +150,101 @@ class Sift::ReviewLoopTest < Minitest::Test
     assert_includes output, "[inline]"
   end
 
+  def test_display_card_shows_position_when_provided
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    loop = Sift::ReviewLoop.new(queue: @queue)
+    item = @queue.all.first
+
+    output = capture_cli_ui_output { loop.send(:display_card, item, position: 2, total: 5) }
+
+    assert_includes output, "[2/5]"
+  end
+
+  def test_display_card_omits_position_when_not_provided
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    loop = Sift::ReviewLoop.new(queue: @queue)
+    item = @queue.all.first
+
+    output = capture_cli_ui_output { loop.send(:display_card, item) }
+
+    refute_includes output, "/"
+  end
+
+  # --- navigation tests ---
+
+  def test_review_item_returns_next_on_n_key
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    item = @queue.all.first
+
+    Sync do |task|
+      rl.instance_variable_set(:@agent_runner, Sift::AgentRunner.new(client: Sift::DryClient.new, task: task))
+
+      stub_read_char("n") do
+        result = nil
+        capture_cli_ui_output do
+          result = rl.send(:review_item, item, position: 1, total: 3)
+        end
+        assert_equal :next, result
+      end
+    end
+  end
+
+  def test_review_item_returns_prev_on_p_key
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    item = @queue.all.first
+
+    Sync do |task|
+      rl.instance_variable_set(:@agent_runner, Sift::AgentRunner.new(client: Sift::DryClient.new, task: task))
+
+      stub_read_char("p") do
+        result = nil
+        capture_cli_ui_output do
+          result = rl.send(:review_item, item, position: 2, total: 3)
+        end
+        assert_equal :prev, result
+      end
+    end
+  end
+
+  def test_nav_keys_ignored_with_single_item
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    item = @queue.all.first
+
+    Sync do |task|
+      rl.instance_variable_set(:@agent_runner, Sift::AgentRunner.new(client: Sift::DryClient.new, task: task))
+
+      # n is ignored (show_nav: false), then q quits
+      stub_read_char("n", "q") do
+        result = nil
+        capture_cli_ui_output do
+          result = rl.send(:review_item, item, position: 1, total: 1)
+        end
+        assert_equal :quit, result
+      end
+    end
+  end
+
+  def test_review_item_returns_acted_on_close
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+    item = @queue.all.first
+
+    Sync do |task|
+      rl.instance_variable_set(:@agent_runner, Sift::AgentRunner.new(client: Sift::DryClient.new, task: task))
+
+      stub_read_char("c") do
+        result = nil
+        capture_cli_ui_output do
+          result = rl.send(:review_item, item, position: 1, total: 3)
+        end
+        assert_equal :acted, result
+      end
+    end
+  end
+
   # --- process_completed_agents tests ---
 
   def test_process_completed_agents_appends_transcript
@@ -208,5 +303,17 @@ class Sift::ReviewLoopTest < Minitest::Test
     $stdout.string
   ensure
     $stdout = old_stdout
+  end
+
+  def stub_read_char(*chars)
+    chars = chars.flatten
+    index = 0
+    ::CLI::UI::Prompt.stub(:read_char, -> {
+      char = chars[index] || "q"
+      index += 1
+      char
+    }) do
+      yield
+    end
   end
 end
