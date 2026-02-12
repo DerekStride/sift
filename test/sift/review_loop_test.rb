@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "tmpdir"
+require "tempfile"
 require "async"
 
 class Sift::ReviewLoopTest < Minitest::Test
@@ -40,6 +41,46 @@ class Sift::ReviewLoopTest < Minitest::Test
     loop = Sift::ReviewLoop.new(queue: @queue, system_prompt: "You are a reviewer.")
     client = loop.instance_variable_get(:@client)
     assert_equal "You are a reviewer.", client.instance_variable_get(:@system_prompt)
+  end
+
+  # --- resolve_system_prompt tests ---
+
+  def test_resolve_system_prompt_reads_file_from_metadata
+    tmpfile = Tempfile.new(["sp-", ".md"])
+    tmpfile.write("You are a reviewer.")
+    tmpfile.close
+
+    item = @queue.push(
+      sources: [{ type: "text", content: "test" }],
+      metadata: { "system_prompt" => tmpfile.path },
+    )
+    loop = Sift::ReviewLoop.new(queue: @queue)
+
+    result = loop.send(:resolve_system_prompt, item)
+    assert_equal "You are a reviewer.", result
+  ensure
+    tmpfile&.unlink
+  end
+
+  def test_resolve_system_prompt_returns_nil_without_metadata
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    loop = Sift::ReviewLoop.new(queue: @queue)
+
+    assert_nil loop.send(:resolve_system_prompt, item)
+  end
+
+  def test_resolve_system_prompt_returns_nil_for_missing_file
+    item = @queue.push(
+      sources: [{ type: "text", content: "test" }],
+      metadata: { "system_prompt" => "/nonexistent/prompt.md" },
+    )
+    loop = Sift::ReviewLoop.new(queue: @queue)
+
+    _, stderr = with_log_level("WARN") do
+      capture_io { assert_nil loop.send(:resolve_system_prompt, item) }
+    end
+
+    assert_includes stderr, "system prompt file not found"
   end
 
   # --- build_agent_prompt tests ---

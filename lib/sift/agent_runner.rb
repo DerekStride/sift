@@ -17,12 +17,12 @@ module Sift
 
     # Spawn a background agent for the given item.
     # Returns immediately — the agent runs as a child fiber.
-    def spawn(item_id, prompt_text, user_prompt, session_id: nil)
+    def spawn(item_id, prompt_text, user_prompt, session_id: nil, system_prompt: nil)
       Log.debug "agent spawn item=#{item_id} session=#{session_id || "new"} prompt=#{user_prompt.lines.first&.chomp}"
 
       agent_task = @semaphore.async do
         Log.debug "agent running item=#{item_id}"
-        @client.prompt(prompt_text, session_id: session_id)
+        @client.prompt(prompt_text, session_id: session_id, system_prompt: system_prompt)
       end
 
       @agents[item_id] = { task: agent_task, prompt: user_prompt, started_at: Time.now }

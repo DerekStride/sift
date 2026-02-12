@@ -82,4 +82,20 @@ class Sift::ClientBuildArgsTest < Minitest::Test
 
     refute_includes args, "--system-prompt"
   end
+
+  def test_build_args_per_call_system_prompt_overrides_instance
+    client = Sift::Client.new(system_prompt: "session default")
+    args = client.send(:build_args, system_prompt: "per-item override")
+
+    idx = args.index("--system-prompt")
+    assert_equal "per-item override", args[idx + 1]
+  end
+
+  def test_build_args_falls_back_to_instance_system_prompt
+    client = Sift::Client.new(system_prompt: "session default")
+    args = client.send(:build_args, system_prompt: nil)
+
+    idx = args.index("--system-prompt")
+    assert_equal "session default", args[idx + 1]
+  end
 end

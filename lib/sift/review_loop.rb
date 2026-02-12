@@ -149,7 +149,9 @@ module Sift
       return if user_prompt.nil? || user_prompt.strip.empty?
 
       prompt_text = build_agent_prompt(item, user_prompt)
-      @agent_runner.spawn(item.id, prompt_text, user_prompt, session_id: item.session_id)
+      system_prompt = resolve_system_prompt(item)
+      @agent_runner.spawn(item.id, prompt_text, user_prompt,
+        session_id: item.session_id, system_prompt: system_prompt)
       puts ::CLI::UI.fmt("{{blue:Agent started in background}}")
     end
 
@@ -254,6 +256,18 @@ module Sift
       end
       parts << user_prompt
       parts.join("\n")
+    end
+
+    # Resolve the system prompt for an item.
+    # Per-item system_prompt (from metadata) overrides the session default.
+    def resolve_system_prompt(item)
+      path = item.metadata&.dig("system_prompt")
+      return nil unless path
+
+      File.read(path)
+    rescue Errno::ENOENT
+      Log.warn "system prompt file not found: #{path}"
+      nil
     end
   end
 end
