@@ -184,6 +184,7 @@ module Sift
       completed = @agent_runner.poll
       completed.each do |item_id, data|
         result = data[:result]
+        error = data[:error]
         user_prompt = data[:prompt]
 
         if result
@@ -201,7 +202,18 @@ module Sift
           @queue.update(item_id, sources: updated_sources, session_id: result.session_id)
           puts ::CLI::UI.fmt("\n{{blue:Agent finished for item #{item_id}}}")
         else
-          puts ::CLI::UI.fmt("\n{{red:Agent failed for item #{item_id}}}")
+          item = @queue.find(item_id)
+          if item
+            error_entry = {
+              "message" => error || "Unknown error",
+              "prompt" => user_prompt,
+              "timestamp" => Time.now.utc.iso8601,
+            }
+            errors = (item.errors || []) + [error_entry]
+            @queue.update(item_id, errors: errors)
+          end
+          Log.warn "agent failed item=#{item_id}: #{error}"
+          puts ::CLI::UI.fmt("\n{{red:Agent failed for item #{item_id}: #{error}}}")
         end
       end
     end

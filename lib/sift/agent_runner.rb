@@ -23,13 +23,17 @@ module Sift
       agent_task = @semaphore.async do
         Log.debug "agent running item=#{item_id}"
         @client.prompt(prompt_text, session_id: session_id)
+      rescue Client::Error => e
+        Log.warn "agent error item=#{item_id}: #{e.message}"
+        e
       end
 
       @agents[item_id] = { task: agent_task, prompt: user_prompt, started_at: Time.now }
     end
 
     # Check for completed agents. Returns a hash of completed results:
-    #   { item_id => { result: Client::Result, prompt: String } }
+    #   { item_id => { result: Client::Result | nil, error: String | nil, prompt: String } }
+    # When the agent catches a Client::Error, result is nil and error contains the message.
     # Removes completed agents from tracking.
     def poll
       completed = {}
@@ -38,11 +42,17 @@ module Sift
         task = agent[:task]
         elapsed = (Time.now - agent[:started_at]).round(1)
         if task.completed?
-          Log.debug "agent completed item=#{item_id} elapsed=#{elapsed}s"
-          completed[item_id] = { result: task.result, prompt: agent[:prompt] }
+          result = task.result
+          if result.is_a?(Client::Error)
+            Log.debug "agent error item=#{item_id} elapsed=#{elapsed}s"
+            completed[item_id] = { result: nil, error: result.message, prompt: agent[:prompt] }
+          else
+            Log.debug "agent completed item=#{item_id} elapsed=#{elapsed}s"
+            completed[item_id] = { result: result, prompt: agent[:prompt] }
+          end
         elsif task.failed?
           Log.debug "agent failed item=#{item_id} elapsed=#{elapsed}s"
-          completed[item_id] = { result: nil, prompt: agent[:prompt] }
+          completed[item_id] = { result: nil, error: "Task failed unexpectedly", prompt: agent[:prompt] }
         else
           Log.debug "agent still running item=#{item_id} elapsed=#{elapsed}s"
         end

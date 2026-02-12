@@ -247,6 +247,37 @@ class Sift::ReviewLoopTest < Minitest::Test
 
   # --- process_completed_agents tests ---
 
+  def test_process_completed_agents_records_error_on_item
+    error_client = Object.new
+    error_client.define_singleton_method(:prompt) do |text, session_id: nil|
+      raise Sift::Client::Error, "No conversation found with session ID: bad-id"
+    end
+
+    item = @queue.push(
+      sources: [{ type: "text", content: "original" }],
+      session_id: "bad-id",
+    )
+    rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
+
+    Sync do |task|
+      runner = Sift::AgentRunner.new(client: error_client, task: task)
+      rl.instance_variable_set(:@agent_runner, runner)
+
+      runner.spawn(item.id, "prompt text", "user question", session_id: "bad-id")
+      task.yield
+
+      capture_cli_ui_output { rl.send(:process_completed_agents) }
+
+      updated = @queue.find(item.id)
+      assert_equal 1, updated.errors.size
+      assert_includes updated.errors.first["message"], "No conversation found"
+      assert_equal "user question", updated.errors.first["prompt"]
+      assert updated.errors.first["timestamp"]
+      # session_id preserved
+      assert_equal "bad-id", updated.session_id
+    end
+  end
+
   def test_process_completed_agents_appends_transcript
     item = @queue.push(sources: [{ type: "text", content: "original" }])
     rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
