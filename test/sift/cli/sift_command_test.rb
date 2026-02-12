@@ -47,6 +47,7 @@ class Sift::CLI::SiftCommandTest < Minitest::Test
 
     assert_equal Sift::CLI::DEFAULT_QUEUE_PATH, cmd.options[:queue_path]
     assert_equal "sonnet", cmd.options[:model]
+    assert_equal 5, cmd.options[:concurrency]
   end
 
   def test_custom_queue_path
@@ -70,10 +71,30 @@ class Sift::CLI::SiftCommandTest < Minitest::Test
     assert cmd.options[:dry]
   end
 
+  def test_custom_concurrency
+    cmd = Sift::CLI::SiftCommand.new(["--concurrency", "3"], stdout: @stdout, stderr: @stderr)
+    cmd.send(:build_option_parser).parse!(cmd.argv)
+
+    assert_equal 3, cmd.options[:concurrency]
+  end
+
+  def test_custom_concurrency_short_flag
+    cmd = Sift::CLI::SiftCommand.new(["-c", "10"], stdout: @stdout, stderr: @stderr)
+    cmd.send(:build_option_parser).parse!(cmd.argv)
+
+    assert_equal 10, cmd.options[:concurrency]
+  end
+
   def test_help_includes_dry_flag
     run_command(["--help"])
 
     assert_includes stdout_output, "--dry"
+  end
+
+  def test_help_includes_concurrency_flag
+    run_command(["--help"])
+
+    assert_includes stdout_output, "--concurrency"
   end
 
   def test_invalid_flag_returns_error

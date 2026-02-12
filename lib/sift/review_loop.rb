@@ -7,15 +7,16 @@ require "tempfile"
 
 module Sift
   class ReviewLoop
-    def initialize(queue:, model: "sonnet", dry: false)
+    def initialize(queue:, model: "sonnet", dry: false, concurrency: 5)
       @queue = queue
       @client = dry ? DryClient.new(model: model) : Client.new(model: model)
+      @concurrency = concurrency
     end
 
     def run
       Sync do |task|
         setup_ui
-        @agent_runner = AgentRunner.new(client: @client, task: task)
+        @agent_runner = AgentRunner.new(client: @client, task: task, limit: @concurrency)
         main_loop
       end
     end
