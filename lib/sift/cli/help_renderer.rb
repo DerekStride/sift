@@ -25,7 +25,7 @@ module Sift
       end
 
       def usage_section
-        suffix = if subcommands.any?
+        suffix = if core_subcommands.any?
           "<command> [flags]"
         else
           "[flags]"
@@ -74,7 +74,7 @@ module Sift
       end
 
       def learn_more_section
-        if subcommands.any?
+        if core_subcommands.any?
           "LEARN MORE\n  Use '#{@command.full_command_name} <command> --help' for more information about a command."
         else
           "LEARN MORE\n  Use '#{@command.full_command_name} --help' for more information."
@@ -83,6 +83,10 @@ module Sift
 
       def subcommands
         @command.class.registered_subcommands
+      end
+
+      def core_subcommands
+        subcommands.select { |s| s[:category] == :core }
       end
 
       def examples
