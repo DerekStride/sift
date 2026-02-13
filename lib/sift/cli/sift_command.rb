@@ -15,7 +15,7 @@ module Sift
         "sift --dry"
       )
 
-      register_subcommand Init, category: :core
+      register_subcommand Init, category: :additional
 
       attr_reader :config
 

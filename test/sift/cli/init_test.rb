@@ -94,7 +94,7 @@ class Sift::CLI::InitTest < Minitest::Test
 
     assert_equal 0, exit_code
     assert_includes out, "init"
-    assert_includes out, "CORE COMMANDS"
+    assert_includes out, "ADDITIONAL COMMANDS"
   end
 
   private
