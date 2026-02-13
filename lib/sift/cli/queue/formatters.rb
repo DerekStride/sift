@@ -27,6 +27,11 @@ module Sift
               puts ::CLI::UI.fmt("{{bold:Updated:}} {{gray:#{item.updated_at}}}")
               puts ::CLI::UI.fmt("{{bold:Session:}} {{gray:#{item.session_id || "none"}}}")
 
+              if item.worktree
+                wt = item.worktree
+                puts ::CLI::UI.fmt("{{bold:Worktree:}} {{cyan:#{wt.branch}}} {{gray:#{wt.path}}}")
+              end
+
               if item.metadata && !item.metadata.empty?
                 puts ::CLI::UI.fmt("{{bold:Metadata:}}")
                 item.metadata.each do |k, v|
@@ -47,6 +52,11 @@ module Sift
             puts "Created: #{item.created_at}"
             puts "Updated: #{item.updated_at}"
             puts "Session: #{item.session_id || "none"}"
+
+            if item.worktree
+              wt = item.worktree
+              puts "Worktree: #{wt.branch} #{wt.path}"
+            end
 
             if item.metadata && !item.metadata.empty?
               puts "Metadata:"

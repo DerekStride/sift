@@ -26,6 +26,10 @@ module Sift
             options[:add_sources] << { type: "text", content: text }
           end
 
+          parser.on("--add-directory PATH", "Add directory source") do |path|
+            options[:add_sources] << { type: "directory", path: path }
+          end
+
           parser.on("--add-transcript PATH", "Add transcript source") do |path|
             options[:add_sources] << { type: "transcript", path: path }
           end

@@ -421,6 +421,8 @@ module Sift
           parts << "```"
         when "text"
           parts << (source.content || "")
+        when "directory"
+          parts << "Directory: #{source.path}" if source.path
         end
         parts << ""
       end

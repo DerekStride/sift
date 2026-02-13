@@ -136,6 +136,129 @@ class Sift::QueueTest < Minitest::Test
     assert item.closed?
   end
 
+  # --- Worktree struct tests ---
+
+  def test_worktree_to_h
+    wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
+    hash = wt.to_h
+
+    assert_equal ".sift/worktrees/abc", hash[:path]
+    assert_equal "sift/abc", hash[:branch]
+  end
+
+  def test_worktree_to_h_omits_nil_values
+    wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc")
+    hash = wt.to_h
+
+    assert_equal ".sift/worktrees/abc", hash[:path]
+    refute hash.key?(:branch)
+  end
+
+  def test_worktree_from_h_with_string_keys
+    hash = { "path" => ".sift/worktrees/abc", "branch" => "sift/abc" }
+    wt = Sift::Queue::Worktree.from_h(hash)
+
+    assert_equal ".sift/worktrees/abc", wt.path
+    assert_equal "sift/abc", wt.branch
+  end
+
+  def test_worktree_from_h_with_symbol_keys
+    hash = { path: ".sift/worktrees/abc", branch: "sift/abc" }
+    wt = Sift::Queue::Worktree.from_h(hash)
+
+    assert_equal ".sift/worktrees/abc", wt.path
+    assert_equal "sift/abc", wt.branch
+  end
+
+  def test_worktree_from_h_returns_nil_for_nil
+    assert_nil Sift::Queue::Worktree.from_h(nil)
+  end
+
+  # --- Item with worktree tests ---
+
+  def test_item_to_h_includes_worktree
+    wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
+    source = Sift::Queue::Source.new(type: "text", content: "test")
+    item = Sift::Queue::Item.new(
+      id: "abc", status: "pending", sources: [source], worktree: wt,
+      created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z"
+    )
+
+    hash = item.to_h
+    assert hash.key?(:worktree)
+    assert_equal ".sift/worktrees/abc", hash[:worktree][:path]
+    assert_equal "sift/abc", hash[:worktree][:branch]
+  end
+
+  def test_item_to_h_omits_worktree_when_nil
+    source = Sift::Queue::Source.new(type: "text", content: "test")
+    item = Sift::Queue::Item.new(id: "abc", status: "pending", sources: [source])
+    refute item.to_h.key?(:worktree)
+  end
+
+  def test_item_from_h_with_worktree
+    hash = {
+      "id" => "abc",
+      "status" => "pending",
+      "sources" => [{ "type" => "text", "content" => "test" }],
+      "worktree" => { "path" => ".sift/worktrees/abc", "branch" => "sift/abc" }
+    }
+
+    item = Sift::Queue::Item.from_h(hash)
+    assert item.worktree
+    assert_equal ".sift/worktrees/abc", item.worktree.path
+    assert_equal "sift/abc", item.worktree.branch
+  end
+
+  def test_item_from_h_without_worktree
+    hash = { "id" => "abc", "status" => "pending", "sources" => [] }
+    item = Sift::Queue::Item.from_h(hash)
+    assert_nil item.worktree
+  end
+
+  def test_worktree_roundtrip_through_queue
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
+    @queue.update(item.id, worktree: wt)
+
+    reloaded = @queue.find(item.id)
+    assert reloaded.worktree
+    assert_equal ".sift/worktrees/abc", reloaded.worktree.path
+    assert_equal "sift/abc", reloaded.worktree.branch
+  end
+
+  def test_worktree_persists_across_queue_instances
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/xyz", branch: "sift/xyz")
+    @queue.update(item.id, worktree: wt)
+
+    new_queue = Sift::Queue.new(@queue_path)
+    found = new_queue.find(item.id)
+    assert_equal "sift/xyz", found.worktree.branch
+  end
+
+  # --- Directory source tests ---
+
+  def test_push_with_directory_source
+    item = @queue.push(sources: [{ type: "directory", path: ".sift/worktrees/abc" }])
+
+    assert_equal 1, item.sources.length
+    assert_equal "directory", item.sources.first.type
+    assert_equal ".sift/worktrees/abc", item.sources.first.path
+  end
+
+  def test_directory_source_roundtrip
+    item = @queue.push(sources: [{ type: "directory", path: ".sift/worktrees/abc" }])
+    reloaded = @queue.find(item.id)
+
+    assert_equal "directory", reloaded.sources.first.type
+    assert_equal ".sift/worktrees/abc", reloaded.sources.first.path
+  end
+
+  def test_directory_source_in_valid_types
+    assert_includes Sift::Queue::VALID_SOURCE_TYPES, "directory"
+  end
+
   # --- push tests ---
 
   def test_push_creates_item_with_pending_status

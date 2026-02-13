@@ -13,7 +13,7 @@ module Sift
     DEFAULT_PATH = ".sift/queue.jsonl"
 
     # Source types for queue items
-    VALID_SOURCE_TYPES = %w[diff file text].freeze
+    VALID_SOURCE_TYPES = %w[diff file text directory].freeze
 
     # Valid status values
     VALID_STATUSES = %w[pending in_progress closed].freeze
@@ -39,8 +39,23 @@ module Sift
       end
     end
 
+    # Represents a worktree associated with a queue item
+    Worktree = Struct.new(:path, :branch, keyword_init: true) do
+      def to_h
+        { path: path, branch: branch }.compact
+      end
+
+      def self.from_h(hash)
+        return nil unless hash
+        new(
+          path: hash["path"] || hash[:path],
+          branch: hash["branch"] || hash[:branch]
+        )
+      end
+    end
+
     # Represents a queue item
-    Item = Struct.new(:id, :status, :sources, :metadata, :session_id, :errors, :created_at, :updated_at, keyword_init: true) do
+    Item = Struct.new(:id, :status, :sources, :metadata, :session_id, :worktree, :errors, :created_at, :updated_at, keyword_init: true) do
       def to_h
         h = {
           id: id,
@@ -51,6 +66,7 @@ module Sift
           created_at: created_at,
           updated_at: updated_at,
         }
+        h[:worktree] = worktree.to_h if worktree
         h[:errors] = errors if errors && !errors.empty?
         h
       end
@@ -64,12 +80,15 @@ module Sift
           Source.from_h(src)
         end
 
+        worktree_data = hash["worktree"] || hash[:worktree]
+
         new(
           id: hash["id"] || hash[:id],
           status: hash["status"] || hash[:status],
           sources: sources,
           metadata: hash["metadata"] || hash[:metadata] || {},
           session_id: hash["session_id"] || hash[:session_id],
+          worktree: Worktree.from_h(worktree_data),
           errors: hash["errors"] || hash[:errors] || [],
           created_at: hash["created_at"] || hash[:created_at],
           updated_at: hash["updated_at"] || hash[:updated_at]

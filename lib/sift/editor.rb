@@ -67,6 +67,8 @@ module Sift
         paths << source.path if source.path && ::File.exist?(source.path)
       when "text"
         paths << write_temp(source.content || "", @item_id, ".md")
+      when "directory"
+        paths << source.path if source.path && ::File.directory?(source.path)
       end
 
       paths

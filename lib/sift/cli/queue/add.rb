@@ -30,6 +30,10 @@ module Sift
             options[:sources] << { type: "text", content: text }
           end
 
+          parser.on("--directory PATH", "Add directory source (repeatable)") do |path|
+            options[:sources] << { type: "directory", path: path }
+          end
+
           parser.on("--stdin TYPE", Sift::Queue::VALID_SOURCE_TYPES,
             "Read source content from stdin (#{Sift::Queue::VALID_SOURCE_TYPES.join("|")})") do |type|
             options[:stdin_type] = type
@@ -54,7 +58,7 @@ module Sift
 
           if options[:sources].empty?
             logger.error("At least one source is required")
-            logger.error("Use --diff, --file, --text, or --stdin")
+            logger.error("Use --diff, --file, --text, --directory, or --stdin")
             return 1
           end
 
