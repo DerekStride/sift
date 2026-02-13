@@ -8,11 +8,14 @@ module Sift
       description "Launch the interactive review loop TUI. Reads pending queue items and presents them for human review."
       examples(
         "sift",
+        "sift init",
         "sift --queue .sift/queue.jsonl",
         "sift --model opus",
         "sift --system-prompt prompts/review.md",
         "sift --dry"
       )
+
+      register_subcommand Init, category: :core
 
       attr_reader :config
 
@@ -44,6 +47,20 @@ module Sift
       def execute
         Sift::ReviewLoop.new(config: @config).run
         0
+      end
+
+      private
+
+      # Hybrid routing: dispatch to subcommand if matched, otherwise
+      # fall through to leaf behavior (launch TUI). This lets `sift`
+      # remain the TUI entry point while also supporting `sift init`.
+      def route_subcommand
+        klass = find_subcommand
+        if klass
+          klass.new(@argv, parent: self).run
+        else
+          run_leaf
+        end
       end
     end
   end
