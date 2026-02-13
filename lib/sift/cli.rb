@@ -2,6 +2,7 @@
 
 require_relative "cli/base"
 require_relative "cli/help_renderer"
+require_relative "cli/init"
 require_relative "cli/queue_command"
 require_relative "cli/sift_command"
 
