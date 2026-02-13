@@ -11,9 +11,10 @@ module Sift
     # Terminal editors that support -p for tab-per-file
     TAB_EDITORS = %w[vi vim nvim].freeze
 
-    def initialize(sources:, item_id:)
+    def initialize(sources:, item_id:, session_id: nil)
       @sources = sources
       @item_id = item_id
+      @session_id = session_id
     end
 
     def open
@@ -41,18 +42,14 @@ module Sift
     end
 
     def collect_paths
-      transcripts = @sources.select { |s| s.type == "transcript" }
-      others = @sources.reject { |s| s.type == "transcript" }
+      paths = []
 
-      paths = others.flat_map { |source| paths_for_source(source) }
-
-      if transcripts.any?
-        combined = transcripts.map.with_index(1) do |source, i|
-          "## Turn #{i}\n\n#{source.content || ""}"
-        end.join("\n\n---\n\n")
-        paths << write_temp(combined, "transcript", ".md")
+      if @session_id
+        content = SessionTranscript.render(@session_id)
+        paths << write_temp(content, "transcript", ".md") if content
       end
 
+      paths.concat(@sources.flat_map { |source| paths_for_source(source) })
       paths.uniq
     end
 

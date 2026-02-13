@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "json"
 require "tmpdir"
 
 class Sift::EditorTest < Minitest::Test
@@ -147,31 +148,47 @@ class Sift::EditorTest < Minitest::Test
     assert_equal "some notes", File.read(paths[0])
   end
 
-  def test_collect_paths_transcript_source
-    source = Sift::Queue::Source.new(type: "transcript", content: "H: Hello\nA: Hi")
+  def test_collect_paths_with_session_id_renders_transcript
+    Dir.mktmpdir("sift_test_") do |dir|
+      # Create a fake session JSONL file
+      session_id = "test-session"
+      slug = Dir.pwd.gsub("/", "-")
+      session_dir = File.join(dir, slug)
+      FileUtils.mkdir_p(session_dir)
+      session_path = File.join(session_dir, "#{session_id}.jsonl")
+      File.write(session_path, [
+        { "type" => "user", "message" => { "role" => "user", "content" => "Hello" } }.to_json,
+        { "type" => "assistant", "message" => { "role" => "assistant", "id" => "m1",
+          "content" => [{ "type" => "text", "text" => "Hi there." }] } }.to_json,
+      ].join("\n") + "\n")
+
+      # Stub the projects dir so SessionTranscript finds our file
+      original_dir = Sift::SessionTranscript::PROJECTS_DIR
+      Sift::SessionTranscript.send(:remove_const, :PROJECTS_DIR)
+      Sift::SessionTranscript.const_set(:PROJECTS_DIR, dir)
+
+      editor = Sift::Editor.new(sources: [], item_id: "abc", session_id: session_id)
+      paths = editor.collect_paths
+
+      assert_equal 1, paths.length
+      assert paths[0].end_with?(".md")
+      content = File.read(paths[0])
+      assert_includes content, "**User:** Hello"
+      assert_includes content, "Hi there."
+    ensure
+      Sift::SessionTranscript.send(:remove_const, :PROJECTS_DIR)
+      Sift::SessionTranscript.const_set(:PROJECTS_DIR, original_dir)
+    end
+  end
+
+  def test_collect_paths_without_session_id_has_no_transcript
+    source = Sift::Queue::Source.new(type: "text", content: "just text")
     editor = Sift::Editor.new(sources: [source], item_id: "abc")
     paths = editor.collect_paths
 
     assert_equal 1, paths.length
     assert paths[0].end_with?(".md")
-    assert_includes paths[0], "sift-abc-transcript"
-    assert_includes File.read(paths[0]), "H: Hello\nA: Hi"
-  end
-
-  def test_collect_paths_multiple_transcripts_combined
-    sources = [
-      Sift::Queue::Source.new(type: "transcript", content: "H: Hello\nA: Hi"),
-      Sift::Queue::Source.new(type: "transcript", content: "H: Follow up\nA: Sure"),
-    ]
-    editor = Sift::Editor.new(sources: sources, item_id: "abc")
-    paths = editor.collect_paths
-
-    assert_equal 1, paths.length
-    content = File.read(paths[0])
-    assert_includes content, "## Turn 1"
-    assert_includes content, "H: Hello"
-    assert_includes content, "## Turn 2"
-    assert_includes content, "H: Follow up"
+    assert_equal "just text", File.read(paths[0])
   end
 
   def test_temp_file_naming

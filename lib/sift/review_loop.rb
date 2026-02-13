@@ -114,6 +114,10 @@ module Sift
             puts ::CLI::UI.fmt("    {{gray:#{label}}}")
           end
         end
+        if item.session_id
+          puts ::CLI::UI.fmt("  {{yellow:transcript}}")
+          puts ::CLI::UI.fmt("    {{gray:[session]}}")
+        end
       end
     end
 
@@ -242,7 +246,7 @@ module Sift
     end
 
     def handle_view(item)
-      editor = Editor.new(sources: item.sources, item_id: item.id)
+      editor = Editor.new(sources: item.sources, item_id: item.id, session_id: item.session_id)
       editor.open
     end
 
@@ -301,18 +305,10 @@ module Sift
       user_prompt = data[:prompt]
 
       if result
-        content = SessionTranscript.render(result.session_id) ||
-          "User: #{user_prompt}\n\nAssistant: #{result.response}"
-
-        transcript_source = Queue::Source.new(
-          type: "transcript",
-          content: content,
-        )
         item = @queue.find(item_id)
         return unless item
 
-        updated_sources = item.sources + [transcript_source]
-        @queue.update(item_id, sources: updated_sources, session_id: result.session_id)
+        @queue.update(item_id, session_id: result.session_id)
         puts ::CLI::UI.fmt("\n{{blue:Agent finished for item #{item_id}}}")
       else
         item = @queue.find(item_id)
@@ -336,13 +332,10 @@ module Sift
       user_prompt = data[:prompt]
 
       if result
-        content = SessionTranscript.render(result.session_id) ||
-          "User: #{user_prompt}\n\nAssistant: #{result.response}"
-
-        transcript_source = { type: "transcript", content: content }
+        text_source = { type: "text", content: user_prompt }
         metadata = { "source" => "general_agent", "prompt" => user_prompt }
 
-        @queue.push(sources: [transcript_source], metadata: metadata, session_id: result.session_id)
+        @queue.push(sources: [text_source], metadata: metadata, session_id: result.session_id)
         puts ::CLI::UI.fmt("\n{{magenta:General agent finished — new item added to queue}}")
       else
         Log.warn "general agent failed key=#{key}: #{error}"
@@ -425,9 +418,6 @@ module Sift
           parts << "```"
           parts << (source.content || "")
           parts << "```"
-        when "transcript"
-          parts << "Previous conversation:"
-          parts << (source.content || "")
         when "text"
           parts << (source.content || "")
         end
