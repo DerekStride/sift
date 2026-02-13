@@ -62,7 +62,7 @@ class SmokeTest < Minitest::Test
     stdout, stderr, status = Timeout.timeout(10) do
       Open3.capture3(
         "bundle", "exec", "ruby", "-e",
-        'require "sift"; c = Sift::Config.new("queue_path" => "/tmp/sift_smoke_test.jsonl", "dry" => true); Sift::ReviewLoop.new(config: c)'
+        'require "sift"; c = Sift::Config.new({}, "queue_path" => "/tmp/sift_smoke_test.jsonl", "dry" => true); Sift::ReviewLoop.new(config: c)'
       )
     end
     assert status.success?, "ReviewLoop.new failed: #{stderr}"
