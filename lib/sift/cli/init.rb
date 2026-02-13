@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 module Sift
   module CLI
     class Init < Base
       command_name "init"
       summary "Initialize .sift/ directory and config"
-      description "Create the .sift/ directory and a config.yml with all keys commented out as a reference."
-      examples "sift init"
+      description "Create the .sift/ directory and a config.yml with all keys commented out as a reference.\n" \
+        "Use --user to create the user-level config at ~/.config/sift/config.yml instead."
+      examples "sift init", "sift init --user"
 
       CONFIG_TEMPLATE = <<~YAML
         # Sift configuration
@@ -31,7 +34,24 @@ module Sift
       SIFT_DIR = ".sift"
       CONFIG_PATH = File.join(SIFT_DIR, "config.yml")
 
+      def define_flags(parser, options)
+        parser.on("--user", "Initialize user-level config (~/.config/sift/config.yml)") do
+          options[:user] = true
+        end
+        super
+      end
+
       def execute
+        if options[:user]
+          init_user_config
+        else
+          init_project_config
+        end
+      end
+
+      private
+
+      def init_project_config
         dir_created = false
         unless Dir.exist?(SIFT_DIR)
           Dir.mkdir(SIFT_DIR)
@@ -46,6 +66,22 @@ module Sift
         end
 
         logger.info("created #{SIFT_DIR}/") if dir_created
+        0
+      end
+
+      def init_user_config
+        path = Sift::Config.default_user_path
+        dir = File.dirname(path)
+
+        FileUtils.mkdir_p(dir) unless Dir.exist?(dir)
+
+        if File.exist?(path)
+          puts "#{path} already exists"
+        else
+          File.write(path, CONFIG_TEMPLATE)
+          puts "created #{path}"
+        end
+
         0
       end
     end
