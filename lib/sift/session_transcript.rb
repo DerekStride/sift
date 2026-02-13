@@ -11,10 +11,30 @@ module Sift
     # Find and parse a session transcript for the given session_id.
     # Returns nil if the session file doesn't exist.
     def self.render(session_id, cwd: Dir.pwd)
-      path = session_path(session_id, cwd: cwd)
-      return nil unless path && File.exist?(path)
+      path = find_session(session_id, cwd: cwd)
+      return nil unless path
 
       new(path).render
+    end
+
+    # Locate a session JSONL file. Tries the cwd-derived path first,
+    # then falls back to scanning all project directories. This handles
+    # work trees where the session was created under a different slug.
+    def self.find_session(session_id, cwd: Dir.pwd)
+      primary = session_path(session_id, cwd: cwd)
+      return primary if File.exist?(primary)
+
+      return nil unless Dir.exist?(PROJECTS_DIR)
+
+      filename = "#{session_id}.jsonl"
+      Dir.children(PROJECTS_DIR).each do |dir|
+        path = File.join(PROJECTS_DIR, dir, filename)
+        if File.exist?(path)
+          Log.debug "session #{session_id} found via fallback in #{dir}"
+          return path
+        end
+      end
+      nil
     end
 
     def self.session_path(session_id, cwd: Dir.pwd)
@@ -28,8 +48,9 @@ module Sift
 
     def render
       entries = parse_entries
+      tool_results = extract_tool_results(entries)
       messages = group_messages(entries)
-      render_messages(messages)
+      render_messages(messages, tool_results)
     end
 
     private
@@ -45,6 +66,24 @@ module Sift
         entries << data
       end
       entries
+    end
+
+    def extract_tool_results(entries)
+      results = {}
+      entries.each do |entry|
+        msg = entry["message"]
+        next unless msg
+
+        content = msg["content"]
+        next unless content.is_a?(Array)
+
+        content.each do |block|
+          next unless block.is_a?(Hash) && block["type"] == "tool_result"
+
+          results[block["tool_use_id"]] = block["content"]
+        end
+      end
+      results
     end
 
     def group_messages(entries)
@@ -77,7 +116,7 @@ module Sift
       messages
     end
 
-    def render_messages(messages)
+    def render_messages(messages, tool_results)
       parts = []
 
       messages.each do |msg|
@@ -85,7 +124,7 @@ module Sift
         when "user"
           parts << "**User:** #{msg[:content]}"
         when "assistant"
-          parts << render_assistant(msg[:blocks])
+          parts << render_assistant(msg[:blocks], tool_results)
         end
         parts << ""
       end
@@ -93,7 +132,7 @@ module Sift
       parts.join("\n").strip
     end
 
-    def render_assistant(blocks)
+    def render_assistant(blocks, tool_results)
       lines = ["**Assistant:**", ""]
 
       blocks.each do |block|
@@ -101,16 +140,17 @@ module Sift
         when "text"
           lines << block["text"]
         when "tool_use"
-          lines << render_tool_call(block)
+          lines << render_tool_call(block, tool_results)
         end
       end
 
       lines.join("\n")
     end
 
-    def render_tool_call(block)
+    def render_tool_call(block, tool_results)
       name = block["name"]
       input = block["input"] || {}
+      result = tool_results[block["id"]]
 
       summary = case name
       when "Read"
@@ -132,7 +172,54 @@ module Sift
         "> #{name}"
       end
 
+      result_suffix = summarize_result(name, result)
+      summary += " #{result_suffix}" if result_suffix
+
       summary
+    end
+
+    def summarize_result(tool_name, result)
+      return nil unless result
+
+      text = result_to_text(result)
+      return nil if text.nil? || text.empty?
+
+      case tool_name
+      when "Glob"
+        count = text.lines.count { |l| !l.strip.empty? }
+        "→ #{count} file#{"s" unless count == 1}"
+      when "Grep"
+        count = text.lines.count { |l| !l.strip.empty? }
+        "→ #{count} match#{"es" unless count == 1}"
+      when "Read"
+        count = text.lines.count
+        "→ #{count} line#{"s" unless count == 1}"
+      when "Bash"
+        first = text.lines.first&.chomp
+        if first && first.length > 60
+          "→ `#{first[0, 57]}...`"
+        elsif first
+          "→ `#{first}`"
+        end
+      when "Edit", "Write"
+        "→ ok"
+      when "Task"
+        first = text.lines.first&.chomp
+        if first && first.length > 60
+          "→ #{first[0, 57]}..."
+        elsif first
+          "→ #{first}"
+        end
+      end
+    end
+
+    def result_to_text(result)
+      case result
+      when String
+        result
+      when Array
+        result.filter_map { |b| b["text"] if b.is_a?(Hash) && b["type"] == "text" }.join("\n")
+      end
     end
   end
 end

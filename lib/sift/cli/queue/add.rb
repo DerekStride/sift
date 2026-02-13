@@ -30,10 +30,6 @@ module Sift
             options[:sources] << { type: "text", content: text }
           end
 
-          parser.on("--transcript PATH", "Add transcript source (repeatable)") do |path|
-            options[:sources] << { type: "transcript", path: path }
-          end
-
           parser.on("--stdin TYPE", Sift::Queue::VALID_SOURCE_TYPES,
             "Read source content from stdin (#{Sift::Queue::VALID_SOURCE_TYPES.join("|")})") do |type|
             options[:stdin_type] = type
@@ -58,7 +54,7 @@ module Sift
 
           if options[:sources].empty?
             stderr.puts "Error: At least one source is required"
-            stderr.puts "Use --diff, --file, --text, --transcript, or --stdin"
+            stderr.puts "Use --diff, --file, --text, or --stdin"
             return 1
           end
 

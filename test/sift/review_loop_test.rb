@@ -140,17 +140,6 @@ class Sift::ReviewLoopTest < Minitest::Test
     assert_includes prompt, "class Bar; end"
   end
 
-  def test_build_agent_prompt_with_transcript_source
-    @queue.push(sources: [{ type: "transcript", content: "H: Hello\nA: Hi" }])
-    loop = Sift::ReviewLoop.new(queue: @queue)
-
-    item = @queue.all.first
-    prompt = loop.send(:build_agent_prompt, item, "continue")
-
-    assert_includes prompt, "Previous conversation:"
-    assert_includes prompt, "H: Hello"
-  end
-
   def test_build_agent_prompt_with_text_source
     @queue.push(sources: [{ type: "text", content: "some notes" }])
     loop = Sift::ReviewLoop.new(queue: @queue)
@@ -215,6 +204,30 @@ class Sift::ReviewLoopTest < Minitest::Test
     output = capture_cli_ui_output { loop.send(:display_card, item) }
 
     refute_includes output, "/"
+  end
+
+  def test_display_card_shows_transcript_when_session_id_present
+    item = @queue.push(
+      sources: [{ type: "text", content: "test" }],
+      session_id: "some-session",
+    )
+    loop = Sift::ReviewLoop.new(queue: @queue)
+
+    output = capture_cli_ui_output { loop.send(:display_card, item) }
+
+    assert_includes output, "transcript"
+    assert_includes output, "[session]"
+  end
+
+  def test_display_card_omits_transcript_without_session_id
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    loop = Sift::ReviewLoop.new(queue: @queue)
+    item = @queue.all.first
+
+    output = capture_cli_ui_output { loop.send(:display_card, item) }
+
+    refute_includes output, "transcript"
+    refute_includes output, "[session]"
   end
 
   # --- navigation tests ---
@@ -350,8 +363,8 @@ class Sift::ReviewLoopTest < Minitest::Test
       assert_equal 1, items.size
 
       new_item = items.first
-      assert_equal "transcript", new_item.sources.first.type
-      assert_includes new_item.sources.first.content, "explore the CLI"
+      assert_equal "text", new_item.sources.first.type
+      assert_equal "explore the CLI", new_item.sources.first.content
       assert_equal "general_agent", new_item.metadata["source"]
       assert_equal "explore the CLI", new_item.metadata["prompt"]
       assert new_item.session_id
@@ -412,7 +425,7 @@ class Sift::ReviewLoopTest < Minitest::Test
     end
   end
 
-  def test_process_completed_agents_appends_transcript
+  def test_process_completed_agents_sets_session_id
     item = @queue.push(sources: [{ type: "text", content: "original" }])
     rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
 
@@ -426,14 +439,13 @@ class Sift::ReviewLoopTest < Minitest::Test
       capture_cli_ui_output { rl.send(:process_completed_agents) }
 
       updated = @queue.find(item.id)
-      assert_equal 2, updated.sources.size
-      assert_equal "transcript", updated.sources.last.type
-      assert_includes updated.sources.last.content, "user question"
+      assert_equal 1, updated.sources.size
+      assert_equal "text", updated.sources.first.type
       assert updated.session_id
     end
   end
 
-  def test_quit_saves_completed_agent_transcripts
+  def test_quit_saves_completed_agent_session_id
     item = @queue.push(sources: [{ type: "text", content: "original" }])
     rl = Sift::ReviewLoop.new(queue: @queue, dry: true)
 
@@ -451,9 +463,8 @@ class Sift::ReviewLoopTest < Minitest::Test
       end
 
       updated = @queue.find(item.id)
-      assert_equal 2, updated.sources.size
-      assert_equal "transcript", updated.sources.last.type
-      assert_includes updated.sources.last.content, "user question"
+      assert_equal 1, updated.sources.size
+      assert updated.session_id
     end
   end
 

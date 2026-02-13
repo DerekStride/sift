@@ -42,17 +42,6 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
     assert_equal "/changes.patch", item.sources.first.path
   end
 
-  def test_add_with_transcript_flag
-    exit_code = run_command(["add", "--transcript", "/chat.log"])
-
-    assert_equal 0, exit_code
-
-    id = @stdout.lines.first.strip
-    item = queue.find(id)
-    assert_equal "transcript", item.sources.first.type
-    assert_equal "/chat.log", item.sources.first.path
-  end
-
   def test_add_with_stdin_flag
     content = "Content from stdin\nLine 2"
     exit_code = run_command(["add", "--stdin", "text"], stdin_content: content)

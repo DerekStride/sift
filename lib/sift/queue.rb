@@ -11,7 +11,7 @@ module Sift
     class Error < StandardError; end
 
     # Source types for queue items
-    VALID_SOURCE_TYPES = %w[diff file transcript text].freeze
+    VALID_SOURCE_TYPES = %w[diff file text].freeze
 
     # Valid status values
     VALID_STATUSES = %w[pending in_progress closed].freeze

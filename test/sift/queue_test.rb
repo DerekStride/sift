@@ -54,11 +54,11 @@ class Sift::QueueTest < Minitest::Test
   end
 
   def test_source_from_h_with_symbol_keys
-    hash = { type: "transcript", path: "/chat.txt" }
+    hash = { type: "text", content: "hello" }
     source = Sift::Queue::Source.from_h(hash)
 
-    assert_equal "transcript", source.type
-    assert_equal "/chat.txt", source.path
+    assert_equal "text", source.type
+    assert_equal "hello", source.content
   end
 
   # --- Item struct tests ---
