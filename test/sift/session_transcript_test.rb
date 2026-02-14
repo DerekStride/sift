@@ -295,6 +295,22 @@ class Sift::SessionTranscriptTest < Minitest::Test
     assert_includes transcript, "> Edit: `/foo.rb` → ok"
   end
 
+  def test_edit_result_shows_error_when_is_error_set
+    write_session([
+      user_entry("Fix it"),
+      assistant_entry("msg1", [
+        { "type" => "tool_use", "id" => "t1", "name" => "Edit", "input" => { "file_path" => "/foo.rb" } },
+      ]),
+      tool_result_entry("t1", "Claude requested permissions to write to /foo.rb, but you haven't granted it yet.", is_error: true),
+    ])
+
+    transcript = Sift::SessionTranscript.new(@session_path).render
+
+    assert_includes transcript, "→ ERROR:"
+    assert_includes transcript, "permission"
+    refute_includes transcript, "→ ok"
+  end
+
   def test_task_result_shows_first_line
     write_session([
       user_entry("Explore"),
@@ -377,12 +393,14 @@ class Sift::SessionTranscriptTest < Minitest::Test
     }
   end
 
-  def tool_result_entry(tool_use_id, content)
+  def tool_result_entry(tool_use_id, content, is_error: false)
+    block = { "tool_use_id" => tool_use_id, "type" => "tool_result", "content" => content }
+    block["is_error"] = true if is_error
     {
       "type" => "user",
       "message" => {
         "role" => "user",
-        "content" => [{ "tool_use_id" => tool_use_id, "type" => "tool_result", "content" => content }],
+        "content" => [block],
       },
     }
   end
