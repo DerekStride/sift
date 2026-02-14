@@ -14,14 +14,9 @@ module Sift
   # apply CLI flag overrides via setters. The resulting Config
   # object is passed to components as the single source of truth.
   #
-  # File-backed values (like system_prompt) are read eagerly and
-  # validated at set-time. Raises Sift::Config::FileNotFound if
-  # a referenced file doesn't exist.
   class Config
     DEFAULT_PROJECT_PATH = ".sift/config.yml"
     DEFAULT_PATH = DEFAULT_PROJECT_PATH
-
-    class FileNotFound < Sift::Error; end
 
     DEFAULTS = {
       "agent" => {
@@ -30,7 +25,6 @@ module Sift
         "allowed_tools" => [],
         "model" => "sonnet",
         "permission_mode" => "acceptEdits",
-        "system_prompt" => nil,
       },
       "worktree" => {
         "setup_command" => nil,
@@ -50,7 +44,6 @@ module Sift
       project_data = load_yaml(project_path)
       config = new(user_data, project_data)
       config.send(:apply_env_vars)
-      config.send(:resolve_file_values)
       config
     end
 
@@ -76,7 +69,6 @@ module Sift
     def agent_allowed_tools = @data.dig("agent", "allowed_tools")
     def agent_model = @data.dig("agent", "model")
     def agent_permission_mode = @data.dig("agent", "permission_mode")
-    def agent_system_prompt = @agent_system_prompt
 
     # -- Agent settings (writers for CLI overrides) --
 
@@ -88,9 +80,6 @@ module Sift
       @data["agent"]["permission_mode"] = value
     end
 
-    def agent_system_prompt=(path)
-      @agent_system_prompt = read_file!(path)
-    end
 
     # -- Worktree settings --
 
@@ -121,21 +110,6 @@ module Sift
 
     def apply_env_vars
       @data["queue_path"] = ENV["SIFT_QUEUE_PATH"] if ENV.key?("SIFT_QUEUE_PATH")
-    end
-
-    # Eagerly read file-backed config values after loading.
-    def resolve_file_values
-      path = @data.dig("agent", "system_prompt")
-      @agent_system_prompt = read_file!(path) if path
-    end
-
-    # Read a file, raising FileNotFound if it doesn't exist.
-    def read_file!(path)
-      return nil if path.nil?
-
-      raise FileNotFound, "file not found: #{path}" unless File.exist?(path)
-
-      File.read(path)
     end
 
     def deep_merge(base, override)

@@ -105,7 +105,7 @@ module Sift
 
     def display_card(item, position: nil, total: nil)
       puts
-      title = "{{bold:Item #{item.id}}}"
+      title = item.title ? "{{bold:#{item.id}}} #{item.title}" : "{{bold:Item #{item.id}}}"
       title += " {{gray:[#{position}/#{total}]}}" if position && total
       ::CLI::UI::Frame.open(title, color: :blue) do
         grouped = item.sources.group_by(&:type)
@@ -261,17 +261,24 @@ module Sift
       user_prompt = read_agent_prompt
       return if user_prompt.nil? || user_prompt.strip.empty?
 
-      @agent_runner.spawn_general(user_prompt, user_prompt, system_prompt: general_agent_system_prompt)
+      @agent_runner.spawn_general(user_prompt, user_prompt,
+        append_system_prompt: agent_context)
       puts ::CLI::UI.fmt("{{magenta:General agent started in background}}")
     end
 
-    def general_agent_system_prompt
-      path = File.join(AGENT_DOCS_DIR, "general.md")
-      template = File.read(path)
-      template.gsub("{{queue_path}}", @queue.path)
-    rescue Errno::ENOENT
-      Log.warn "agent doc not found: #{path}"
-      nil
+    def agent_context
+      @agent_context ||= begin
+        parts = []
+
+        path = File.join(AGENT_DOCS_DIR, "general.md")
+        if File.exist?(path)
+          template = File.read(path)
+          parts << template.gsub("{{queue_path}}", @queue.path)
+        end
+
+        parts << CLI::Queue::Prime.generate
+        parts.join("\n")
+      end
     end
 
     def handle_agent(item)
@@ -290,10 +297,9 @@ module Sift
       end
 
       prompt_text = build_agent_prompt(item, user_prompt)
-      system_prompt = resolve_system_prompt(item)
       @agent_runner.spawn(item.id, prompt_text, user_prompt,
-        session_id: item.session_id, system_prompt: system_prompt,
-        cwd: item.worktree&.path)
+        session_id: item.session_id,
+        append_system_prompt: agent_context, cwd: item.worktree&.path)
       refresh_statusline
       puts ::CLI::UI.fmt("{{blue:Agent started in background}}")
     end
@@ -470,16 +476,5 @@ module Sift
       parts.join("\n")
     end
 
-    # Resolve the system prompt for an item.
-    # Per-item system_prompt (from metadata) overrides the session default.
-    def resolve_system_prompt(item)
-      path = item.metadata&.dig("system_prompt")
-      return nil unless path
-
-      File.read(path)
-    rescue Errno::ENOENT
-      Log.warn "system prompt file not found: #{path}"
-      nil
-    end
   end
 end

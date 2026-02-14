@@ -21,7 +21,6 @@ module Sift
         #   allowed_tools: []        # Restrict agent to these tools
         #   model: sonnet            # Claude model (sonnet, opus, haiku)
         #   permission_mode: acceptEdits  # Claude permission mode
-        #   system_prompt:           # Path to system prompt file
 
         # worktree:
         #   setup_command:           # Command to run when setting up worktree

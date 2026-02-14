@@ -99,34 +99,24 @@ class Sift::CLI::Queue::AddTest < Minitest::Test
     assert_equal 1, item.metadata["priority"]
   end
 
-  def test_add_with_system_prompt
-    exit_code = run_command([
-      "add",
-      "--text", "test",
-      "--system-prompt", "/path/to/prompt.md",
-    ])
+  def test_add_with_title_flag
+    exit_code = run_command(["add", "--title", "Fix login bug", "--text", "The login form crashes"])
 
     assert_equal 0, exit_code
 
     id = @stdout.lines.first.strip
     item = queue.find(id)
-    assert_equal "/path/to/prompt.md", item.metadata["system_prompt"]
+    assert_equal "Fix login bug", item.title
   end
 
-  def test_add_with_system_prompt_and_metadata
-    exit_code = run_command([
-      "add",
-      "--text", "test",
-      "--system-prompt", "/path/to/prompt.md",
-      "--metadata", '{"workflow":"analyze"}',
-    ])
+  def test_add_without_title_has_nil_title
+    exit_code = run_command(["add", "--text", "test"])
 
     assert_equal 0, exit_code
 
     id = @stdout.lines.first.strip
     item = queue.find(id)
-    assert_equal "/path/to/prompt.md", item.metadata["system_prompt"]
-    assert_equal "analyze", item.metadata["workflow"]
+    assert_nil item.title
   end
 
   def test_add_with_no_sources_returns_error

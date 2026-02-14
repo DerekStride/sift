@@ -6,6 +6,7 @@ require_relative "queue/edit"
 require_relative "queue/list"
 require_relative "queue/show"
 require_relative "queue/rm"
+require_relative "queue/prime"
 
 module Sift
   module CLI
@@ -25,6 +26,7 @@ module Sift
       register_subcommand Queue::Show, category: :core
       register_subcommand Queue::Edit, category: :additional
       register_subcommand Queue::Rm, category: :additional
+      register_subcommand Queue::Prime, category: :additional
 
       def define_flags(parser, options)
         @config = Sift::Config.load
