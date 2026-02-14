@@ -80,7 +80,7 @@ module Sift
         content.each do |block|
           next unless block.is_a?(Hash) && block["type"] == "tool_result"
 
-          results[block["tool_use_id"]] = block["content"]
+          results[block["tool_use_id"]] = { content: block["content"], is_error: block["is_error"] }
         end
       end
       results
@@ -150,7 +150,9 @@ module Sift
     def render_tool_call(block, tool_results)
       name = block["name"]
       input = block["input"] || {}
-      result = tool_results[block["id"]]
+      result_entry = tool_results[block["id"]]
+      result_content = result_entry&.fetch(:content, nil)
+      is_error = result_entry&.fetch(:is_error, false)
 
       summary = case name
       when "Read"
@@ -172,17 +174,22 @@ module Sift
         "> #{name}"
       end
 
-      result_suffix = summarize_result(name, result)
+      result_suffix = summarize_result(name, result_content, is_error: is_error)
       summary += " #{result_suffix}" if result_suffix
 
       summary
     end
 
-    def summarize_result(tool_name, result)
+    def summarize_result(tool_name, result, is_error: false)
       return nil unless result
 
       text = result_to_text(result)
       return nil if text.nil? || text.empty?
+
+      if is_error
+        first = text.lines.first&.chomp
+        return "→ ERROR: #{first[0, 80]}"
+      end
 
       case tool_name
       when "Glob"
