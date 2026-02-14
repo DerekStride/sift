@@ -2,6 +2,7 @@
 
 require "json"
 require "open3"
+require "shellwords"
 
 module Sift
   # Client for calling Claude CLI and managing sessions
@@ -33,6 +34,10 @@ module Sift
 
       Log.debug "client done elapsed=#{elapsed}s bytes=#{stdout.bytesize}"
       parse_response(stdout)
+    rescue Errno::ENOENT => e
+      raise Error, "Command not found: #{e.message}"
+    rescue SystemCallError => e
+      raise Error, "Failed to execute agent: #{e.message}"
     end
 
     # Analyze a diff hunk with Claude
@@ -44,7 +49,8 @@ module Sift
     private
 
     def build_args(session_id: nil, append_system_prompt: nil)
-      args = [@config.agent_command, "-p", "--output-format", "json"]
+      args = Array(@config.agent_command).flat_map { |s| s.to_s.shellsplit }
+      args += ["-p", "--output-format", "json"]
       args += @config.agent_flags if @config.agent_flags&.any?
       @config.agent_allowed_tools&.each { |tool| args += ["--allowedTools", tool] }
       args += ["--model", @config.agent_model] if @config.agent_model
