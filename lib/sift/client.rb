@@ -50,6 +50,7 @@ module Sift
       args += @config.agent_flags if @config.agent_flags&.any?
       @config.agent_allowed_tools&.each { |tool| args += ["--allowedTools", tool] }
       args += ["--model", @config.agent_model] if @config.agent_model
+      args += ["--permission-mode", @config.agent_permission_mode] if @config.agent_permission_mode
       args += ["--system-prompt", effective_prompt] if effective_prompt
       args += ["--resume", session_id] if session_id
       args

@@ -34,6 +34,9 @@ module Sift
         parser.on("-s", "--system-prompt PATH", "System prompt file for agent invocations") do |v|
           @config.agent_system_prompt = v
         end
+        parser.on("--permission-mode MODE", "Claude permission mode (default: acceptEdits)") do |v|
+          @config.agent_permission_mode = v
+        end
         parser.on("--dry", "Dry mode: skip Claude API calls, print prompts instead") do
           @config.dry = true
         end

@@ -114,6 +114,18 @@ class Sift::ConfigTest < Minitest::Test
     assert_equal "opus", config.agent_model
   end
 
+  def test_agent_permission_mode_default
+    config = Sift::Config.new
+    assert_equal "acceptEdits", config.agent_permission_mode
+  end
+
+  def test_agent_permission_mode_setter
+    config = Sift::Config.new
+    config.agent_permission_mode = "bypassPermissions"
+
+    assert_equal "bypassPermissions", config.agent_permission_mode
+  end
+
   def test_agent_system_prompt_setter_reads_file_content
     tmpfile = Tempfile.new(["sp-", ".md"])
     tmpfile.write("You are a reviewer.")

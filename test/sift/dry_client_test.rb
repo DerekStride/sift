@@ -170,4 +170,31 @@ class Sift::ClientBuildArgsTest < Minitest::Test
 
     refute_includes args, "--allowedTools"
   end
+
+  def test_build_args_includes_default_permission_mode
+    config = Sift::Config.new
+    client = Sift::Client.new(config: config)
+    args = client.send(:build_args)
+
+    assert_includes args, "--permission-mode"
+    idx = args.index("--permission-mode")
+    assert_equal "acceptEdits", args[idx + 1]
+  end
+
+  def test_build_args_includes_custom_permission_mode
+    config = Sift::Config.new("agent" => { "permission_mode" => "bypassPermissions" })
+    client = Sift::Client.new(config: config)
+    args = client.send(:build_args)
+
+    idx = args.index("--permission-mode")
+    assert_equal "bypassPermissions", args[idx + 1]
+  end
+
+  def test_build_args_omits_permission_mode_when_nil
+    config = Sift::Config.new("agent" => { "permission_mode" => nil })
+    client = Sift::Client.new(config: config)
+    args = client.send(:build_args)
+
+    refute_includes args, "--permission-mode"
+  end
 end

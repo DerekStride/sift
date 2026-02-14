@@ -29,6 +29,7 @@ module Sift
         "flags" => [],
         "allowed_tools" => [],
         "model" => "sonnet",
+        "permission_mode" => "acceptEdits",
         "system_prompt" => nil,
       },
       "worktree" => {
@@ -74,12 +75,17 @@ module Sift
     def agent_flags = @data.dig("agent", "flags")
     def agent_allowed_tools = @data.dig("agent", "allowed_tools")
     def agent_model = @data.dig("agent", "model")
+    def agent_permission_mode = @data.dig("agent", "permission_mode")
     def agent_system_prompt = @agent_system_prompt
 
     # -- Agent settings (writers for CLI overrides) --
 
     def agent_model=(value)
       @data["agent"]["model"] = value
+    end
+
+    def agent_permission_mode=(value)
+      @data["agent"]["permission_mode"] = value
     end
 
     def agent_system_prompt=(path)
