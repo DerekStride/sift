@@ -4,6 +4,7 @@ require "test_helper"
 require "tmpdir"
 require "tempfile"
 require "async"
+require "support/fake_git"
 
 class Sift::ReviewLoopTest < Minitest::Test
   include TestHelpers
@@ -545,13 +546,10 @@ class Sift::ReviewLoopTest < Minitest::Test
     wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
     @queue.update(item.id, worktree: wt)
 
-    mock_git = Object.new
-    mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| true }
-    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
-    mock_git.define_singleton_method(:worktree_diff) { |_path, _base| "+added line\n" }
+    fake_git = FakeGit.new(has_commits: true, diff_output: "+added line\n")
 
     rl = Sift::ReviewLoop.new(config: build_config)
-    rl.instance_variable_set(:@git, mock_git)
+    rl.instance_variable_set(:@git, fake_git)
 
     Sync do |task|
       runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
@@ -580,12 +578,10 @@ class Sift::ReviewLoopTest < Minitest::Test
     wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
     @queue.update(item.id, worktree: wt)
 
-    mock_git = Object.new
-    mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| false }
-    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
+    fake_git = FakeGit.new(has_commits: false)
 
     rl = Sift::ReviewLoop.new(config: build_config)
-    rl.instance_variable_set(:@git, mock_git)
+    rl.instance_variable_set(:@git, fake_git)
 
     Sync do |task|
       runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
@@ -631,13 +627,10 @@ class Sift::ReviewLoopTest < Minitest::Test
     wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
     @queue.update(item.id, worktree: wt)
 
-    mock_git = Object.new
-    mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| true }
-    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
-    mock_git.define_singleton_method(:worktree_diff) { |_path, _base| "+new diff\n" }
+    fake_git = FakeGit.new(has_commits: true, diff_output: "+new diff\n")
 
     rl = Sift::ReviewLoop.new(config: build_config)
-    rl.instance_variable_set(:@git, mock_git)
+    rl.instance_variable_set(:@git, fake_git)
 
     Sync do |task|
       runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
@@ -663,12 +656,10 @@ class Sift::ReviewLoopTest < Minitest::Test
     wt = Sift::Queue::Worktree.new(path: ".sift/worktrees/abc", branch: "sift/abc")
     @queue.update(item.id, worktree: wt)
 
-    mock_git = Object.new
-    mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| false }
-    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
+    fake_git = FakeGit.new(has_commits: false)
 
     rl = Sift::ReviewLoop.new(config: build_config)
-    rl.instance_variable_set(:@git, mock_git)
+    rl.instance_variable_set(:@git, fake_git)
 
     Sync do |task|
       runner = Sift::AgentRunner.new(client: Sift::DryClient.new, task: task)
