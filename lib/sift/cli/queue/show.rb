@@ -33,6 +33,10 @@ module Sift
             return 1
           end
 
+          if item.worktree
+            item = refresh_worktree_sources(item)
+          end
+
           if options[:json]
             puts JSON.pretty_generate(item.to_h)
           else
@@ -43,6 +47,31 @@ module Sift
         end
 
         private
+
+        def refresh_worktree_sources(item)
+          git = Sift::Git.new
+          config = Sift::Config.new
+          base = config.worktree_base_branch
+          sources = item.sources.map(&:to_h)
+
+          has_commits = git.has_commits_beyond?(item.worktree.branch, base)
+          has_local = git.worktree_dirty?(item.worktree.path, base)
+
+          if has_commits || has_local
+            diff_content = git.worktree_diff(item.worktree.path, base)
+            entry = { type: "diff", path: "worktree", content: diff_content }
+            idx = sources.index { |s| s[:type] == "diff" && s[:path] == "worktree" }
+            idx ? sources[idx] = entry : sources << entry
+          end
+
+          unless sources.any? { |s| s[:type] == "directory" && s[:path] == item.worktree.path }
+            sources << { type: "directory", path: item.worktree.path }
+          end
+
+          updated_sources = sources.map { |s| Sift::Queue::Source.from_h(s) }
+          queue.update(item.id, sources: updated_sources)
+          queue.find(item.id)
+        end
 
         def queue
           @queue ||= Sift::Queue.new(options[:queue_path])

@@ -44,6 +44,19 @@ module Sift
       run("diff", "#{base}..#{branch}")
     end
 
+    # Does the worktree working tree differ from base? (includes uncommitted changes)
+    def worktree_dirty?(worktree_path, base)
+      _, _, status = Open3.capture3("git", "-C", worktree_path, "diff", "--quiet", base)
+      !status.success?
+    end
+
+    # Return diff of worktree working tree against base (committed + uncommitted changes).
+    def worktree_diff(worktree_path, base)
+      out, err, status = Open3.capture3("git", "-C", worktree_path, "diff", base)
+      raise Error, "git diff failed: #{err.strip}" unless status.success?
+      out
+    end
+
     private
 
     def run(*args)

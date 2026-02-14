@@ -77,6 +77,7 @@ module Sift
     def review_item(item, position: nil, total: nil)
       loop do
         process_completed_agents
+        item = refresh_worktree_sources(item)
         display_card(item, position: position, total: total)
         action = prompt_action(item, show_nav: total && total > 1)
 
@@ -381,8 +382,11 @@ module Sift
       base = @config.worktree_base_branch
       sources = item.sources.map(&:to_h)
 
-      if @git.has_commits_beyond?(item.worktree.branch, base)
-        diff_content = @git.diff(base, item.worktree.branch)
+      has_commits = @git.has_commits_beyond?(item.worktree.branch, base)
+      has_local = @git.worktree_dirty?(item.worktree.path, base)
+
+      if has_commits || has_local
+        diff_content = @git.worktree_diff(item.worktree.path, base)
         entry = { type: "diff", path: "worktree", content: diff_content }
         idx = sources.index { |s| s[:type] == "diff" && s[:path] == "worktree" }
         idx ? sources[idx] = entry : sources << entry
@@ -393,6 +397,14 @@ module Sift
       end
 
       sources.map { |s| Queue::Source.from_h(s) }
+    end
+
+    def refresh_worktree_sources(item)
+      return item unless item.worktree
+
+      updated_sources = add_worktree_sources(item)
+      @queue.update(item.id, sources: updated_sources)
+      @queue.find(item.id)
     end
 
     def warn_stale_items

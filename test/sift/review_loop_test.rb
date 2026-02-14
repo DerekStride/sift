@@ -547,7 +547,8 @@ class Sift::ReviewLoopTest < Minitest::Test
 
     mock_git = Object.new
     mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| true }
-    mock_git.define_singleton_method(:diff) { |_base, _b| "+added line\n" }
+    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
+    mock_git.define_singleton_method(:worktree_diff) { |_path, _base| "+added line\n" }
 
     rl = Sift::ReviewLoop.new(config: build_config)
     rl.instance_variable_set(:@git, mock_git)
@@ -581,6 +582,7 @@ class Sift::ReviewLoopTest < Minitest::Test
 
     mock_git = Object.new
     mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| false }
+    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
 
     rl = Sift::ReviewLoop.new(config: build_config)
     rl.instance_variable_set(:@git, mock_git)
@@ -631,7 +633,8 @@ class Sift::ReviewLoopTest < Minitest::Test
 
     mock_git = Object.new
     mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| true }
-    mock_git.define_singleton_method(:diff) { |_base, _b| "+new diff\n" }
+    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
+    mock_git.define_singleton_method(:worktree_diff) { |_path, _base| "+new diff\n" }
 
     rl = Sift::ReviewLoop.new(config: build_config)
     rl.instance_variable_set(:@git, mock_git)
@@ -662,6 +665,7 @@ class Sift::ReviewLoopTest < Minitest::Test
 
     mock_git = Object.new
     mock_git.define_singleton_method(:has_commits_beyond?) { |_b, _base| false }
+    mock_git.define_singleton_method(:worktree_dirty?) { |_path, _base| false }
 
     rl = Sift::ReviewLoop.new(config: build_config)
     rl.instance_variable_set(:@git, mock_git)
