@@ -18,6 +18,7 @@ module Sift
       include Bubbletea::Model
 
       AGENT_DOCS_DIR = File.expand_path("../../../../agent-docs", __FILE__)
+      PROMPT_PREFIX_WIDTH = 45 # "  Prompt (Ctrl-G for editor, Esc to cancel): "
 
       attr_reader :mode, :items, :index, :flash, :flash_style,
         :prompt_target, :width, :height
@@ -79,6 +80,7 @@ module Sift
         when Bubbletea::WindowSizeMessage
           @width = message.width
           @height = message.height
+          @text_input.width = [@width - PROMPT_PREFIX_WIDTH, 10].max if @mode == :prompting
           [self, nil]
 
         when AgentPollMessage
@@ -134,6 +136,7 @@ module Sift
       # --- Async reactor management ---
 
       def start_async_reactor
+        @spawn_queue = Thread::Queue.new
         @async_thread = Thread.new do
           Sync do |task|
             @async_task = task
@@ -143,6 +146,7 @@ module Sift
             )
             # Keep the reactor alive until the thread is killed
             loop do
+              drain_spawn_queue
               task.yield
               sleep 0.1
             end
@@ -151,6 +155,17 @@ module Sift
 
         # Wait for agent_runner to be initialized
         sleep 0.05 until @agent_runner
+      end
+
+      def drain_spawn_queue
+        while (req = @spawn_queue.pop(true) rescue nil)
+          case req[:type]
+          when :spawn
+            @agent_runner.spawn(req[:item_id], req[:prompt_text], req[:user_prompt], **req[:opts])
+          when :spawn_general
+            @agent_runner.spawn_general(req[:prompt_text], req[:user_prompt], **req[:opts])
+          end
+        end
       end
 
       def stop_async_reactor
@@ -387,6 +402,7 @@ module Sift
         @prompt_item = item
         @text_input = Bubbles::TextInput.new
         @text_input.placeholder = target == :general_agent ? "Ask anything..." : "Agent instruction..."
+        @text_input.width = [@width - PROMPT_PREFIX_WIDTH, 10].max
         @text_input.focus
       end
 
@@ -443,15 +459,21 @@ module Sift
         end
 
         prompt_text = build_agent_prompt(item, user_prompt)
-        @agent_runner.spawn(item.id, prompt_text, user_prompt,
-          session_id: item.session_id,
-          append_system_prompt: agent_context, cwd: item.worktree&.path)
+        @spawn_queue.push(
+          type: :spawn, item_id: item.id, prompt_text: prompt_text,
+          user_prompt: user_prompt, opts: {
+            session_id: item.session_id,
+            append_system_prompt: agent_context, cwd: item.worktree&.path,
+          }
+        )
         set_flash("Agent started for item #{item.id}", :info)
       end
 
       def dispatch_general_agent(user_prompt)
-        @agent_runner.spawn_general(user_prompt, user_prompt,
-          append_system_prompt: agent_context)
+        @spawn_queue.push(
+          type: :spawn_general, prompt_text: user_prompt,
+          user_prompt: user_prompt, opts: { append_system_prompt: agent_context }
+        )
         set_flash("General agent started", :info)
       end
 
