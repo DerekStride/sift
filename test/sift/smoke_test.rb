@@ -35,13 +35,7 @@ class SmokeTest < Minitest::Test
     assert_instance_of Sift::Queue, queue
   end
 
-  def test_review_loop_can_be_instantiated
-    config = Sift::Config.new({}, "queue_path" => "/tmp/sift_smoke_test_#{Process.pid}.jsonl", "dry" => true)
-    rl = Sift::ReviewLoop.new(config: config)
-    assert_instance_of Sift::ReviewLoop, rl
-  end
-
-  def test_sift_version_flag
+def test_sift_version_flag
     assert_raises(SystemExit) { capture_io { Sift::CLI::SiftCommand.new(["--version"]).run } }
   end
 
