@@ -44,7 +44,8 @@ module Sift
       end
 
       def execute
-        Sift::ReviewLoop.new(config: @config).run
+        app = Sift::TUI::App.new(config: @config)
+        Bubbletea.run(app)
         0
       end
 

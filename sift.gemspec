@@ -25,7 +25,10 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "async", "~> 2.0"
+  spec.add_dependency "bubbletea", "~> 0.1"
+  spec.add_dependency "bubbles", "~> 0.1"
   spec.add_dependency "cli-ui", "~> 2.0"
+  spec.add_dependency "lipgloss", "~> 0.2"
   spec.add_dependency "logger"
   spec.add_dependency "reline"
 
