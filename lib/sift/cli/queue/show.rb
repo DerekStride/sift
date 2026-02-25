@@ -49,6 +49,11 @@ module Sift
         private
 
         def refresh_worktree_sources(item)
+          unless Sift::Worktree.exists?(item.id)
+            Log.warn "Worktree missing for item #{item.id}, skipping source refresh"
+            return item
+          end
+
           git = Sift::Git.new
           config = Sift::Config.new
           base = config.worktree_base_branch

@@ -410,6 +410,11 @@ module Sift
     def refresh_worktree_sources(item)
       return item unless item.worktree
 
+      unless Sift::Worktree.exists?(item.id)
+        Log.warn "Worktree missing for item #{item.id}, skipping source refresh"
+        return item
+      end
+
       updated_sources = add_worktree_sources(item)
       @queue.update(item.id, sources: updated_sources)
       @queue.find(item.id)
