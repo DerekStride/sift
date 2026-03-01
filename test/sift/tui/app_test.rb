@@ -31,7 +31,7 @@ class Sift::TUI::AppTest < Minitest::Test
     app = build_app
     app.init
 
-    assert_equal :reviewing, app.mode
+    assert_equal :reviewing, app.mode.name
     assert_equal 1, app.items.size
   ensure
     app&.send(:stop_async_reactor)
@@ -219,7 +219,7 @@ class Sift::TUI::AppTest < Minitest::Test
 
     app.update(make_key("a"))
 
-    assert_equal :prompting, app.mode
+    assert_equal :prompting, app.mode.name
     assert_equal :item_agent, app.prompt_target
   ensure
     app&.send(:stop_async_reactor)
@@ -232,7 +232,7 @@ class Sift::TUI::AppTest < Minitest::Test
 
     app.update(make_key("g"))
 
-    assert_equal :prompting, app.mode
+    assert_equal :prompting, app.mode.name
     assert_equal :general_agent, app.prompt_target
   ensure
     app&.send(:stop_async_reactor)
@@ -248,7 +248,7 @@ class Sift::TUI::AppTest < Minitest::Test
 
     app.update(make_key("esc"))
 
-    assert_equal :reviewing, app.mode
+    assert_equal :reviewing, app.mode.name
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -278,7 +278,7 @@ class Sift::TUI::AppTest < Minitest::Test
     app.init
 
     # Simulate waiting mode
-    app.instance_variable_set(:@mode, :waiting)
+    app.instance_variable_set(:@mode, Sift::TUI::Keymap::WAITING)
     output = app.view
 
     assert_includes output, "Waiting"
