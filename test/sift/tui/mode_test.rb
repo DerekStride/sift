@@ -19,12 +19,18 @@ class Sift::TUI::ModeTest < Minitest::Test
     assert_nil Sift::TUI::Keymap::WAITING.lookup("v")
   end
 
-  def test_ctrl_c_maps_to_different_handlers_across_modes
+  def test_ctrl_c_is_registered_in_all_modes
+    refute_nil Sift::TUI::Keymap::REVIEWING.lookup("ctrl+c")
+    refute_nil Sift::TUI::Keymap::PROMPTING.lookup("ctrl+c")
+    refute_nil Sift::TUI::Keymap::WAITING.lookup("ctrl+c")
+  end
+
+  def test_ctrl_c_has_different_handlers_across_reviewing_and_prompting
     reviewing_action = Sift::TUI::Keymap::REVIEWING.lookup("ctrl+c")
     prompting_action = Sift::TUI::Keymap::PROMPTING.lookup("ctrl+c")
 
-    refute_nil reviewing_action
-    refute_nil prompting_action
+    # Behavioral difference (quit vs cancel) is verified in app_test.rb;
+    # here we just confirm the dispatch table wires distinct handlers.
     refute_equal reviewing_action.handler, prompting_action.handler
   end
 
@@ -40,10 +46,28 @@ class Sift::TUI::ModeTest < Minitest::Test
     refute_includes bar, "quit"
   end
 
+  def test_action_bar_includes_nav_category
+    bar = Sift::TUI::Keymap::REVIEWING.action_bar(categories: [:nav])
+
+    assert_includes bar, "next"
+    assert_includes bar, "prev"
+    refute_includes bar, "view"
+    refute_includes bar, "quit"
+  end
+
   def test_action_bar_omits_nil_labels
     bar = Sift::TUI::Keymap::REVIEWING.action_bar(categories: [:hidden])
 
     assert_equal "", bar
+  end
+
+  def test_action_bar_for_waiting_mode
+    bar = Sift::TUI::Keymap::WAITING.action_bar(categories: [:action, :quit])
+
+    assert_includes bar, "general"
+    assert_includes bar, "quit"
+    refute_includes bar, "view"
+    refute_includes bar, "next"
   end
 
   def test_name_returns_mode_name
