@@ -21,8 +21,9 @@ class Sift::TUI::AppTest < Minitest::Test
 
   def test_init_quits_with_empty_queue
     app = build_app
-    _model, cmd = app.init
+    model, cmd = app.init
 
+    assert_same app, model
     assert_instance_of Bubbletea::QuitCommand, cmd
   end
 
@@ -190,9 +191,10 @@ class Sift::TUI::AppTest < Minitest::Test
     app = build_app
     app.init
 
-    _model, cmd = app.update(make_key("c"))
+    model, cmd = app.update(make_key("c"))
 
     # Item closed and no more items → should quit
+    assert_same app, model
     assert_instance_of Bubbletea::QuitCommand, cmd
     updated = @queue.find(app.send(:instance_variable_get, :@queue).all.first.id)
     assert_equal "closed", updated.status
@@ -205,8 +207,35 @@ class Sift::TUI::AppTest < Minitest::Test
     app = build_app
     app.init
 
-    _model, cmd = app.update(make_key("q"))
+    model, cmd = app.update(make_key("q"))
 
+    assert_same app, model
+    assert_instance_of Bubbletea::QuitCommand, cmd
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_key_v_returns_exec_command
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+
+    model, cmd = app.update(make_key("v"))
+
+    assert_same app, model
+    assert_instance_of Bubbletea::ExecCommand, cmd
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_ctrl_c_quits_in_reviewing_mode
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+
+    model, cmd = app.update(make_key("ctrl+c"))
+
+    assert_same app, model
     assert_instance_of Bubbletea::QuitCommand, cmd
   ensure
     app&.send(:stop_async_reactor)
@@ -217,10 +246,10 @@ class Sift::TUI::AppTest < Minitest::Test
     app = build_app
     app.init
 
-    app.update(make_key("a"))
-
-    assert_equal :prompting, app.mode.name
-    assert_equal :item_agent, app.prompt_target
+    assert_mode_transition(app, :reviewing, :prompting) do
+      app.update(make_key("a"))
+      assert_equal :item_agent, app.prompt_target
+    end
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -230,10 +259,10 @@ class Sift::TUI::AppTest < Minitest::Test
     app = build_app
     app.init
 
-    app.update(make_key("g"))
-
-    assert_equal :prompting, app.mode.name
-    assert_equal :general_agent, app.prompt_target
+    assert_mode_transition(app, :reviewing, :prompting) do
+      app.update(make_key("g"))
+      assert_equal :general_agent, app.prompt_target
+    end
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -246,9 +275,35 @@ class Sift::TUI::AppTest < Minitest::Test
     app.init
     app.update(make_key("a")) # enter prompt mode
 
-    app.update(make_key("esc"))
+    assert_mode_transition(app, :prompting, :reviewing) do
+      app.update(make_key("esc"))
+    end
+  ensure
+    app&.send(:stop_async_reactor)
+  end
 
-    assert_equal :reviewing, app.mode.name
+  def test_ctrl_c_cancels_prompt_in_prompting_mode
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+
+    assert_mode_transition(app, :prompting, :reviewing) do
+      app.update(make_key("ctrl+c"))
+    end
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_submit_empty_prompt_returns_self_as_model
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.update(make_key("a")) # enter prompt mode, text input is empty
+
+    model, cmd = app.update(make_key("enter"))
+
+    assert_same app, model
+    assert_nil cmd
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -270,20 +325,60 @@ class Sift::TUI::AppTest < Minitest::Test
     app&.send(:stop_async_reactor)
   end
 
-  # --- view_waiting tests ---
+  # --- waiting mode tests ---
 
   def test_view_waiting_shows_waiting_message
     @queue.push(sources: [{ type: "text", content: "test" }])
     app = build_app
     app.init
 
-    # Simulate waiting mode
-    app.instance_variable_set(:@mode, Sift::TUI::Keymap::WAITING)
-    output = app.view
+    assert_mode_transition(app, :waiting, :waiting) do
+      output = app.view
+      assert_includes output, "Waiting"
+      assert_includes output, "general"
+      assert_includes output, "quit"
+    end
+  ensure
+    app&.send(:stop_async_reactor)
+  end
 
-    assert_includes output, "Waiting"
-    assert_includes output, "general"
-    assert_includes output, "quit"
+  def test_key_g_in_waiting_mode_enters_prompt
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+
+    assert_mode_transition(app, :waiting, :prompting) do
+      app.update(make_key("g"))
+      assert_equal :general_agent, app.prompt_target
+    end
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_key_q_in_waiting_mode_quits
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.instance_variable_set(:@mode, Sift::TUI::Keymap::WAITING)
+
+    model, cmd = app.update(make_key("q"))
+
+    assert_same app, model
+    assert_instance_of Bubbletea::QuitCommand, cmd
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_ctrl_c_quits_in_waiting_mode
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.instance_variable_set(:@mode, Sift::TUI::Keymap::WAITING)
+
+    model, cmd = app.update(make_key("ctrl+c"))
+
+    assert_same app, model
+    assert_instance_of Bubbletea::QuitCommand, cmd
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -386,6 +481,21 @@ class Sift::TUI::AppTest < Minitest::Test
     config.queue_path = @queue_path
     config.dry = dry
     Sift::TUI::App.new(config: config)
+  end
+
+  # Asserts that the app transitions from one mode to another during the block.
+  # Also handles setup: forces the app into `from` mode before yielding,
+  # which makes WAITING-mode tests self-contained without manual instance_variable_set.
+  def assert_mode_transition(app, from, to)
+    mode_map = {
+      reviewing: Sift::TUI::Keymap::REVIEWING,
+      prompting: Sift::TUI::Keymap::PROMPTING,
+      waiting:   Sift::TUI::Keymap::WAITING,
+    }
+    app.instance_variable_set(:@mode, mode_map.fetch(from))
+    assert_equal from, app.mode.name, "precondition: expected mode #{from}"
+    yield
+    assert_equal to, app.mode.name, "expected transition #{from} → #{to}"
   end
 
   # Create a KeyMessage for testing.
