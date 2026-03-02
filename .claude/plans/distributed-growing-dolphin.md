@@ -2,17 +2,37 @@
 
 ## Overall Assessment
 
-The plan is **well-structured and thorough** — it correctly identifies the distribution friction problem, proposes a reasonable phased approach, and demonstrates solid understanding of the existing Ruby implementation. However, there are several issues ranging from inaccuracies to missing concerns that should be addressed before implementation.
+The plan is **well-structured and thorough** — it correctly identifies the distribution friction problem, proposes a reasonable approach, and demonstrates solid understanding of the existing Ruby implementation. Below are the remaining issues, resolved items, and an expanded analysis of the prime command and Magnus question.
 
 ---
 
-## Issues
+## Resolved Issues
 
-### 1. `transcript` source type is missing from the plan
+### ~~1. `transcript` source type missing~~ → Resolved
 
-The plan lists valid source types as `"diff", "file", "text", "directory"` (matching `VALID_SOURCE_TYPES` in `queue.rb`), but `sq edit --add-transcript PATH` accepts a `"transcript"` type source. The Rust `Source` struct and its deserialization must handle `transcript` as a valid type, even if `sq add` doesn't create them directly. Items read from disk may contain transcript sources appended by the TUI agent runner.
+The plan's `Source` struct uses `type_: String` (not an enum), so transcript sources round-trip through serde without special handling. The Rust CLI doesn't need to validate source types — it just reads/writes them. Only `sq add` constrains what types it creates, but existing items with `transcript` sources will deserialize and serialize correctly. Metadata can carry any additional type semantics.
 
-**Impact:** Rust CLI would fail to parse existing queue files containing transcript sources.
+### ~~9. `claim` semantics may not be needed~~ → Confirmed: defer
+
+`claim` is only used by the Ruby TUI, not by any `sq` subcommand. Drop from Phase 1 scope.
+
+### ~~11. Config loading / YAML~~ → Resolved: no YAML needed
+
+Every `sq` subcommand only uses `queue_path`. The precedence chain is fully expressible without YAML:
+
+1. `--queue` / `-q` CLI flag (highest)
+2. `SIFT_QUEUE_PATH` env var
+3. `.sift/queue.jsonl` default
+
+No subcommand accesses agent settings, concurrency, dry mode, or worktree config. The one edge case — `sq show` creating a `Config.new` for `worktree_base_branch` — uses the hardcoded default (`"main"`), not a loaded YAML value. **Drop `serde_yaml` from deps entirely.**
+
+### ~~Suggestion C: Missing `serde_yaml` dependency~~ → Withdrawn
+
+No longer needed per above.
+
+---
+
+## Open Issues
 
 ### 2. `sq edit` flags are incomplete
 
@@ -32,7 +52,7 @@ The `--rm-source` behavior is notably tricky — indices are sorted in reverse b
 
 ### 3. `sq list` jq integration details are slightly off
 
-The plan says `--filter 'select(...)'` pipes items to jq. The actual Ruby wraps it as:
+The actual Ruby wraps filter expressions as:
 ```ruby
 jq_filter(items, "[.[] | #{options[:filter]}]")
 ```
@@ -40,43 +60,55 @@ And sorting uses:
 ```ruby
 jq_filter(items, "sort_by(#{path} // infinite)")
 ```
-Note the `// infinite` fallback for null sort keys. The `-e` flag is also passed to jq. These details matter for byte-for-byte parity.
+Note the `// infinite` fallback for null sort keys. The `-e` flag is also passed to jq. These details matter for parity.
 
-### 4. `prime` is harder to port than implied
+### 4. `sq prime` — Implementation approach (expanded)
 
-`sq prime` dynamically introspects all registered subcommands via Ruby's `OptionParser` to generate flag documentation. In Rust with clap, you'd need to either:
-- Hardcode the help text (diverges over time)
-- Use clap's introspection to extract flag metadata programmatically
-- Generate it at build time
+`sq prime` dynamically introspects all registered subcommands via Ruby's `OptionParser` to generate flag documentation. This is non-trivial to port. Three viable approaches:
 
-This is non-trivial and deserves its own design section. The plan treats it as just another subcommand.
+| Approach | How | Maintenance | Risk |
+|----------|-----|-------------|------|
+| **A: Runtime clap introspection** | `Command::get_subcommands()` + `Arg::get_long()`/`get_help()`/`get_value_names()` | Low — flags auto-update | clap doesn't expose arg hints as cleanly as OptionParser |
+| **B: build.rs codegen** | Define flags in a data file, generate prime string at compile time | Medium — two artifacts to sync | Drift between spec and code |
+| **C: Shared schema** | Single TOML/JSON spec drives both Rust clap and Ruby OptionParser | High upfront, low ongoing | Schema complexity |
 
-### 5. `--system-prompt` flag is mentioned in CLAUDE.md but not in the plan
+**Recommendation: Approach A (runtime clap introspection).** It mirrors the Ruby design, keeps a single source of truth, and self-updates when flags change. The main gap — clap doesn't expose argument type hints ("PATH", "STRING") like OptionParser's `.arg` — is solved by using `Arg::value_name("PATH")` in the clap builder and reading it back via `Arg::get_value_names()`.
 
-The CLAUDE.md examples show `sq add --system-prompt prompts/sec.md`. If this flag exists in the actual `add` implementation, the Rust version needs it too. (Worth verifying — it may only be documented aspirationally.)
+This means using clap's builder API or derive with `#[arg(value_name = "PATH")]` and introspecting the built `Command`. The plan should add a design section for this.
+
+### 5. `--system-prompt` flag in CLAUDE.md
+
+The CLAUDE.md examples show `sq add --system-prompt prompts/sec.md`. Verify whether this flag exists in the actual `add` implementation before starting — it may only be documented aspirationally. If it exists, it likely stores the path in metadata.
 
 ### 6. JSON output format: `pretty_generate` vs compact
 
-`sq list --json` uses `JSON.pretty_generate` (indented), while JSONL on disk is compact (one line per item). `sq show --json` also uses `pretty_generate`. The plan says "byte-for-byte JSON output parity" but doesn't call out this distinction. Rust's `serde_json` defaults to compact — you'd need `serde_json::to_string_pretty` for the CLI output paths.
+`sq list --json` uses `JSON.pretty_generate` (indented). JSONL on disk is compact (one line per item). Rust's `serde_json` defaults to compact — use `serde_json::to_string_pretty` for CLI output paths.
 
 ### 7. `to_h` field omission rules need exact replication
 
-The Ruby `Item#to_h` uses `.compact` and conditional inclusion:
+Ruby's `Item#to_h` uses `.compact` and conditional inclusion:
 - `title` omitted when nil
 - `worktree` omitted when nil
 - `blocked_by` omitted when empty
 - `errors` omitted when empty
-- `session_id` is always included (even when nil — it's not compacted the same way)
+- `session_id` is always included (even when nil)
 
-Getting serde to replicate this requires careful use of `#[serde(skip_serializing_if = "...")]` with different predicates per field. The plan's Rust struct definition doesn't address this.
+Requires careful `#[serde(skip_serializing_if = "...")]` with different predicates per field.
 
-### 8. Timestamp format precision
+### 8. Timestamp format — low risk (expanded)
 
-The plan says "ISO8601 with .000Z precision". Ruby uses `Time.now.utc.iso8601(3)` which produces `2025-03-01T12:34:56.789Z`. The Rust `time` crate's default ISO8601 formatting differs — you'll need a custom format string. This is a common source of parity bugs.
+Timestamps are **opaque strings** in the Ruby codebase:
+- Generated via `Time.now.utc.iso8601(3)` → `"2026-03-02T12:34:56.789Z"`
+- Stored as strings in JSONL, never parsed back into Time objects
+- Displayed as-is in `sq show` and `sq list`
+- Sorted by jq (lexicographic string comparison), not by Ruby
+- Never compared, calculated, or parsed by Ruby code
 
-### 9. `claim` semantics may not be needed in Phase 1
+This means the Rust CLI just needs to:
+1. Generate ISO 8601 strings with millisecond precision on `push`/`update` — `chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ")` or equivalent
+2. Preserve existing timestamp strings on read/write round-trips
 
-The plan lists `claim(id)` as a required queue method. However, `claim` is only used by the Ruby TUI (`sift`), not by any `sq` subcommand. Since Phase 1 only replaces `sq`, implementing `claim` adds complexity for no immediate value. Consider deferring it.
+Low risk as long as an explicit format string is used rather than a crate's default ISO 8601 output.
 
 ### 10. The `exe/sq` replacement strategy is underspecified
 
@@ -86,13 +118,30 @@ The plan says `exe/sq` gets "replaced" but doesn't address:
 - The gemspec currently lists `sq` as an executable — removing it changes the gem's behavior
 - Should there be a Ruby fallback wrapper that detects the binary?
 
-### 11. Config loading needs more detail
-
-The Rust CLI needs to load `.sift/config.yml` and `~/.config/sift/config.yml` and respect `SIFT_QUEUE_PATH`. The plan mentions `config.rs` but doesn't discuss YAML parsing (needs a dep like `serde_yaml`), the merge precedence, or the specific config keys the CLI actually uses (primarily just `queue_path`).
-
 ### 12. `--queue` / `-q` global flag
 
-The parent `QueueCommand` defines `-q`/`--queue PATH` as a global flag available to all subcommands. The plan's clap struct shows this correctly on the top-level `Cli`, but it's worth noting this flag must be propagated to all subcommands — clap handles this differently than OptionParser.
+The parent `QueueCommand` defines `-q`/`--queue PATH` as a global flag available to all subcommands. Clap handles this differently than OptionParser — the flag must be on the top-level `Cli` struct and propagated. The plan's struct shows this correctly but it's worth noting explicitly.
+
+---
+
+## Magnus vs. Strong Contract
+
+**Recommendation: Drop Magnus. Define the JSONL schema as the contract.**
+
+The JSONL queue is already a clean boundary between `sq` (Rust) and `sift` (Ruby TUI):
+- Both tools read/write the same file
+- File locking (flock) handles concurrency
+- The Item schema is simple and stable
+- No shared memory, no FFI, no process communication
+
+Magnus would only make sense if the Ruby TUI needed Rust queue operations **in-process** for performance (e.g., filtering 10k+ items without jq). But if `sift` continues to work fine with its own `Queue` class reading the same JSONL, then **the file format IS the contract** and Magnus adds coupling for no gain.
+
+A strong contract means:
+1. **Document the JSONL schema explicitly** — field names, types, omission rules, timestamp format
+2. **Add cross-language parity tests** — Ruby writes → Rust reads, and vice versa
+3. **Version the schema** if it ever changes
+
+Replace Phase 2 (Magnus) with a "Schema Contract" section that formalizes the JSONL format as the integration point.
 
 ---
 
@@ -100,7 +149,7 @@ The parent `QueueCommand` defines `-q`/`--queue PATH` as a global flag available
 
 ### A. Add a parity test harness early
 
-Rather than building all commands then testing parity, set up a test harness in week 1 that:
+Set up a test harness in week 1 that:
 1. Runs a Ruby `sq` command against a fixture queue
 2. Runs the equivalent Rust `sq` command against the same queue
 3. Diffs stdout, stderr, and the resulting JSONL
@@ -109,36 +158,33 @@ This catches format drift immediately and provides confidence throughout develop
 
 ### B. Consider `--help` output parity
 
-Users switching from Ruby to Rust `sq` will notice if `--help` output changes significantly. The plan doesn't mention help text formatting at all. Clap's default help style differs substantially from OptionParser's.
-
-### C. Missing dependency: `serde_yaml`
-
-The config system requires YAML parsing. Add to dependencies:
-```toml
-serde_yaml = "0.9"
-```
+Users switching from Ruby to Rust `sq` will notice if `--help` output changes significantly. Clap's default help style differs substantially from OptionParser's.
 
 ### D. Consider the `--system-prompt` flag scope
 
-If `--system-prompt` exists on `sq add`, it means sources may include a `system_prompt` field or items have a `system_prompt` attribute. Verify the actual implementation before starting.
+If `--system-prompt` exists on `sq add`, verify the actual implementation before starting.
 
 ### E. The `formatters.rs` file needs significant detail
 
-The text output format (non-JSON) uses `cli-ui` colored frames when available, with a plain fallback. The Rust version needs to decide: always plain? Use a Rust coloring crate? This affects the "byte-for-byte parity" goal for text output.
+The text output format (non-JSON) uses `cli-ui` colored frames when available, with a plain fallback. The Rust version needs to decide: always plain? Use a Rust coloring crate? This affects the parity goal for text output.
 
 ---
 
 ## What the plan gets right
 
-- Correct phasing: Phase 1 (pure Rust CLI) before Phase 2 (Magnus FFI) is the right call
 - Using external `jq` for Phase 1 filtering avoids a huge scope increase
 - File-based JSONL queue means zero coordination needed between Ruby TUI and Rust CLI
-- The dependency list is reasonable and well-chosen
+- The dependency list is reasonable and well-chosen (minus `serde_yaml`, which can be dropped)
 - Risk mitigation table is practical
-- The decision to skip Magnus unless benchmarks justify it shows good restraint
 
 ---
 
 ## Verdict
 
-**Approve with revisions.** The plan is solid architecturally but needs corrections to the command flag specifications (especially `edit` and source types) and more detail on serialization parity, config loading, and the `prime` command. Address the issues above before starting implementation — most are specification gaps that would become bugs if discovered mid-build.
+**Approve with revisions.** The plan is solid architecturally. Key changes needed:
+
+1. **Fix `sq edit` flag spec** (issue #2) — this is the most impactful gap
+2. **Add a `prime` design section** using clap runtime introspection (issue #4)
+3. **Add serde serialization rules** for field omission (issue #7)
+4. **Replace Phase 2 (Magnus) with a schema contract** — document the JSONL format as the integration boundary
+5. **Drop `serde_yaml`** and `config.rs` complexity — three lines of queue path resolution replaces it
