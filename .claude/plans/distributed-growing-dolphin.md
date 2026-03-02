@@ -12,9 +12,19 @@ The plan is **well-structured and thorough** — it correctly identifies the dis
 
 The plan's `Source` struct uses `type_: String` (not an enum), so transcript sources round-trip through serde without special handling. The Rust CLI doesn't need to validate source types — it just reads/writes them. Only `sq add` constrains what types it creates, but existing items with `transcript` sources will deserialize and serialize correctly. Metadata can carry any additional type semantics.
 
-### ~~9. `claim` semantics may not be needed~~ → Confirmed: defer
+### ~~9. `claim` semantics may not be needed~~ → Confirmed: defer from Phase 1
 
-`claim` is only used by the Ruby TUI, not by any `sq` subcommand. Drop from Phase 1 scope.
+`claim` is only called by `AgentRunner#spawn` in the TUI. It implements a **lease pattern**:
+
+1. **Acquire**: atomically transitions `pending` → `in_progress` under `LOCK_EX` (returns nil if item isn't pending — prevents two agents claiming the same item)
+2. **Hold**: the agent runs inside a block while the item is `in_progress`
+3. **Release**: `ensure` block calls `release(id)` → transitions back to `pending`, regardless of success/failure
+
+The concurrent test (`test_claim_concurrent_only_one_wins`) verifies two forked processes racing to claim results in exactly one winner.
+
+**Why it doesn't affect Phase 1:** `claim` is just `update(id, status: "in_progress")` under an exclusive lock with a pending-only guard. Nothing in the JSONL format is claim-specific. The Rust `sq edit --set-status` already bypasses the claim guard (intentionally — it's a manual override).
+
+**What to document in the schema contract:** Concurrent writers must use `flock(LOCK_EX)`. Items with `in_progress` status may revert to `pending` if the holding process crashes (the TUI handles this via `ensure`, not via the file format). The Rust CLI must never break the flock invariant.
 
 ### ~~11. Config loading / YAML~~ → Resolved: no YAML needed
 
