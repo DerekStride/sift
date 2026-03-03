@@ -11,7 +11,6 @@ require "timeout"
 # still exercising command behavior.
 class SmokeTest < Minitest::Test
   EXE_SIFT = File.expand_path("../../exe/sift", __dir__)
-  EXE_SQ = File.expand_path("../../exe/sq", __dir__)
 
   # --- Subprocess: one per executable to verify cold-start boot ---
 
@@ -19,12 +18,6 @@ class SmokeTest < Minitest::Test
     stdout, stderr, status = Timeout.timeout(10) { Open3.capture3("bundle", "exec", EXE_SIFT, "--help") }
     assert status.success?, "sift --help failed: #{stderr}"
     assert_includes stdout, "USAGE"
-  end
-
-  def test_sq_boots
-    stdout, stderr, status = Timeout.timeout(10) { Open3.capture3("bundle", "exec", EXE_SQ, "--help") }
-    assert status.success?, "sq --help failed: #{stderr}"
-    assert_includes stdout, "sq"
   end
 
   # --- In-process: command behavior without subprocess overhead ---
@@ -57,20 +50,4 @@ def test_sift_version_flag
     end
   end
 
-  def test_sq_help
-    out, = capture_io { Sift::CLI::QueueCommand.new(["--help"]).run }
-    assert_includes out, "sq"
-  end
-
-  def test_sq_list_empty_queue
-    Dir.mktmpdir("sift_smoke_") do |dir|
-      queue_path = File.join(dir, "queue.jsonl")
-      exit_code = nil
-      capture_io do
-        Sift::Log.reset!
-        exit_code = Sift::CLI::QueueCommand.new(["list", "--queue", queue_path]).run
-      end
-      assert_equal 0, exit_code
-    end
-  end
 end
