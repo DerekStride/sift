@@ -1,3 +1,3 @@
 [workspace]
-members = ["sq-rust"]
+members = ["sq"]
 resolver = "2"
