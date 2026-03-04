@@ -88,6 +88,25 @@ sq rm <id>                                     # Remove item
 
 Run `sq --help` or `sq <command> --help` for full flag details.
 
+## Task Fields: Primitives vs Metadata
+
+Sift keeps the queue schema intentionally small. A limited set of fields are first-class item primitives (for core workflow and UX), and integration-specific task data is expected to live in `metadata`.
+
+High-level guidance for integrators:
+
+- Keep domain/task attributes (for example, priority, type, due date, plugin state) in `metadata`.
+- Use a stable namespace for integration-owned keys (for example, `metadata.pi_tasks`).
+- Prefer patch-style updates via `sq edit --merge-metadata` to avoid replacing unrelated metadata.
+- Treat promoted primitives (like `title`, and any future explicitly promoted fields) as opt-in conveniences, not a replacement for integration metadata.
+
+Example update pattern:
+
+```bash
+sq edit <id> --merge-metadata '{"pi_tasks":{"priority":"high"}}'
+```
+
+This approach preserves flexibility for integrations while keeping the core queue model predictable.
+
 ## Development
 
 ```bash
