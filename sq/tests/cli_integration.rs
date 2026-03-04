@@ -223,6 +223,65 @@ fn test_list_json() {
 }
 
 #[test]
+fn test_list_default_excludes_closed() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "item1"])
+        .output()
+        .unwrap();
+    let id1 = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    sq_cmd()
+        .args(["-q", &qp, "add", "--text", "item2"])
+        .assert()
+        .success();
+
+    sq_cmd()
+        .args(["-q", &qp, "edit", &id1, "--set-status", "closed"])
+        .assert()
+        .success();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "list", "--json"])
+        .output()
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json.as_array().unwrap().len(), 1);
+    assert_eq!(json[0]["status"], "pending");
+}
+
+#[test]
+fn test_list_all_includes_closed() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "item1"])
+        .output()
+        .unwrap();
+    let id1 = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    sq_cmd()
+        .args(["-q", &qp, "add", "--text", "item2"])
+        .assert()
+        .success();
+
+    sq_cmd()
+        .args(["-q", &qp, "edit", &id1, "--set-status", "closed"])
+        .assert()
+        .success();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "list", "--all", "--json"])
+        .output()
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json.as_array().unwrap().len(), 2);
+}
+
+#[test]
 fn test_list_status_filter() {
     let dir = TempDir::new().unwrap();
     let qp = queue_path(&dir);

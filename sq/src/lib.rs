@@ -81,6 +81,10 @@ pub struct ListArgs {
     #[arg(long = "status", value_name = "STATUS")]
     pub status: Option<String>,
 
+    /// Include closed items when status is not explicitly filtered
+    #[arg(long = "all")]
+    pub all: bool,
+
     /// Output as JSON
     #[arg(long = "json")]
     pub json: bool,

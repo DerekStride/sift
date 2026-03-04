@@ -13,8 +13,16 @@ pub fn execute(args: &ListArgs, queue_path: PathBuf) -> Result<i32> {
 
     let mut items: Vec<Item> = if args.ready {
         queue.ready()
+    } else if let Some(status) = args.status.as_deref() {
+        queue.filter(Some(status))
+    } else if args.all {
+        queue.filter(None)
     } else {
-        queue.filter(args.status.as_deref())
+        queue
+            .all()
+            .into_iter()
+            .filter(|item| item.status != "closed")
+            .collect()
     };
 
     // Apply jq filter
