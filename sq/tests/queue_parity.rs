@@ -1,4 +1,4 @@
-use sq::queue::{Item, Queue, Source, UpdateAttrs, Worktree};
+use sift_queue::queue::{Item, Queue, Source, UpdateAttrs, Worktree};
 use std::collections::HashSet;
 use tempfile::TempDir;
 
@@ -649,7 +649,7 @@ fn test_id_format() {
             )
             .unwrap();
         assert_eq!(item.id.len(), 3);
-        assert!(item.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+        assert!(item.id.chars().all(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit()),
             "ID contains invalid chars: {}", item.id);
     }
 }

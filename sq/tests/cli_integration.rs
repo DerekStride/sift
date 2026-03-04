@@ -4,7 +4,7 @@ use std::fs;
 use tempfile::TempDir;
 
 fn sq_cmd() -> Command {
-    Command::cargo_bin("sq").unwrap()
+    assert_cmd::cargo::cargo_bin_cmd!("sq")
 }
 
 fn queue_path(dir: &TempDir) -> String {

@@ -1,17 +1,17 @@
 use clap::Parser;
-use sq::{Cli, Commands};
+use sift_queue::{Cli, Commands};
 
 fn main() {
     let cli = Cli::parse();
-    let queue_path = sq::queue_path::resolve_queue_path(cli.queue.as_ref());
+    let queue_path = sift_queue::queue_path::resolve_queue_path(cli.queue.as_ref());
 
     let exit_code = match cli.command {
-        Commands::Add(ref args) => sq::cli::commands::add::execute(args, queue_path),
-        Commands::List(ref args) => sq::cli::commands::list::execute(args, queue_path),
-        Commands::Show(ref args) => sq::cli::commands::show::execute(args, queue_path),
-        Commands::Edit(ref args) => sq::cli::commands::edit::execute(args, queue_path),
-        Commands::Rm(ref args) => sq::cli::commands::rm::execute(args, queue_path),
-        Commands::Prime(_) => sq::cli::commands::prime::execute(),
+        Commands::Add(ref args) => sift_queue::cli::commands::add::execute(args, queue_path),
+        Commands::List(ref args) => sift_queue::cli::commands::list::execute(args, queue_path),
+        Commands::Show(ref args) => sift_queue::cli::commands::show::execute(args, queue_path),
+        Commands::Edit(ref args) => sift_queue::cli::commands::edit::execute(args, queue_path),
+        Commands::Rm(ref args) => sift_queue::cli::commands::rm::execute(args, queue_path),
+        Commands::Prime(_) => sift_queue::cli::commands::prime::execute(),
     };
 
     match exit_code {
