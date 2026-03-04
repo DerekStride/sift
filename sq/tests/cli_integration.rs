@@ -722,6 +722,65 @@ fn test_edit_clear_blocked_by() {
     assert!(json.get("blocked_by").is_none());
 }
 
+// ── Status Transition Commands ──────────────────────────────────────────────
+
+#[test]
+fn test_close_command() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "test"])
+        .output()
+        .unwrap();
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    sq_cmd().args(["-q", &qp, "close", &id]).assert().success();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "show", &id, "--json"])
+        .output()
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "closed");
+}
+
+#[test]
+fn test_close_command_json() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "test"])
+        .output()
+        .unwrap();
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "close", &id, "--json"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["id"], id);
+    assert_eq!(json["status"], "closed");
+}
+
+#[test]
+fn test_status_command_not_found() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+    fs::create_dir_all(dir.path()).unwrap();
+    fs::write(dir.path().join("queue.jsonl"), "").unwrap();
+
+    sq_cmd()
+        .args(["-q", &qp, "close", "zzz"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Item not found: zzz"));
+}
+
 // ── Rm Command ──────────────────────────────────────────────────────────────
 
 #[test]

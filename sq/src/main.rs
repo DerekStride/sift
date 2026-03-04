@@ -10,6 +10,9 @@ fn main() {
         Commands::List(ref args) => sift_queue::cli::commands::list::execute(args, queue_path),
         Commands::Show(ref args) => sift_queue::cli::commands::show::execute(args, queue_path),
         Commands::Edit(ref args) => sift_queue::cli::commands::edit::execute(args, queue_path),
+        Commands::Close(ref args) => {
+            sift_queue::cli::commands::status::execute(args, queue_path, "closed")
+        }
         Commands::Rm(ref args) => sift_queue::cli::commands::rm::execute(args, queue_path),
         Commands::Prime(_) => sift_queue::cli::commands::prime::execute(),
     };

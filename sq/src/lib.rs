@@ -26,6 +26,8 @@ pub enum Commands {
     Show(ShowArgs),
     /// Edit an existing queue item
     Edit(EditArgs),
+    /// Mark an item as closed
+    Close(StatusArgs),
     /// Remove an item from the queue
     Rm(RmArgs),
     /// Output sift workflow context for AI agents
@@ -168,6 +170,16 @@ pub struct EditArgs {
     /// Set blocker IDs (comma-separated, empty to clear)
     #[arg(long = "set-blocked-by", value_name = "IDS")]
     pub set_blocked_by: Option<String>,
+
+    /// Output as JSON
+    #[arg(long = "json")]
+    pub json: bool,
+}
+
+#[derive(Parser)]
+pub struct StatusArgs {
+    /// Item ID
+    pub id: Option<String>,
 
     /// Output as JSON
     #[arg(long = "json")]
