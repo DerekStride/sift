@@ -10,12 +10,14 @@ require_relative "exec_command"
 require_relative "messages"
 require_relative "styles"
 require_relative "keymap"
+require_relative "commands"
 require_relative "card"
 
 module Sift
   module TUI
     class App
       include Bubbletea::Model
+      include Commands
 
       AGENT_DOCS_DIR = File.expand_path("../../../../agent-docs", __FILE__)
       PROMPT_PREFIX_WIDTH = 45 # "  Prompt (Ctrl-G for editor, Esc to cancel): "
@@ -30,7 +32,7 @@ module Sift
         @git = Git.new
 
         # Core state
-        @mode = :reviewing
+        @mode = Keymap::REVIEWING
         @items = []
         @index = 0
 
@@ -80,7 +82,7 @@ module Sift
         when Bubbletea::WindowSizeMessage
           @width = message.width
           @height = message.height
-          @text_input.width = [@width - PROMPT_PREFIX_WIDTH, 10].max if @mode == :prompting
+          @text_input.width = [@width - PROMPT_PREFIX_WIDTH, 10].max if @mode == Keymap::PROMPTING
           [self, nil]
 
         when AgentPollMessage
@@ -99,7 +101,7 @@ module Sift
           [self, nil]
 
         when ViewDoneMessage
-          @mode = :reviewing
+          @mode = Keymap::REVIEWING
           refresh_items
           [self, nil]
 
@@ -115,11 +117,11 @@ module Sift
 
       def view
         case @mode
-        when :reviewing
+        when Keymap::REVIEWING
           view_reviewing
-        when :prompting
+        when Keymap::PROMPTING
           view_prompting
-        when :waiting
+        when Keymap::WAITING
           view_waiting
         end
       end
@@ -314,81 +316,12 @@ module Sift
       # --- Key handling ---
 
       def handle_key(message)
-        case @mode
-        when :reviewing
-          handle_key_reviewing(message)
-        when :prompting
-          handle_key_prompting(message)
-        when :waiting
-          handle_key_waiting(message)
-        end
-      end
-
-      def handle_key_reviewing(message)
-        key = message.to_s
-
-        case key
-        when "q", "ctrl+c"
-          stop_async_reactor
-          [self, Bubbletea.quit]
-        when "v"
-          handle_view
-        when "a"
-          return [self, nil] unless current_item
-          enter_prompt_mode(:item_agent, current_item)
-          [self, nil]
-        when "c"
-          return [self, nil] unless current_item
-          done = handle_close(current_item)
-          if done
-            stop_async_reactor
-            [self, Bubbletea.quit]
-          else
-            [self, nil]
-          end
-        when "g"
-          enter_prompt_mode(:general_agent, nil)
-          [self, nil]
-        when "n"
-          return [self, nil] if @items.size <= 1
-          @index = (@index + 1) % @items.size
-          [self, nil]
-        when "p"
-          return [self, nil] if @items.size <= 1
-          @index = (@index - 1) % @items.size
-          [self, nil]
-        else
-          [self, nil]
-        end
-      end
-
-      def handle_key_prompting(message)
-        key = message.to_s
-
-        case key
-        when "enter"
-          submit_prompt
-        when "ctrl+g"
-          submit_prompt_via_editor
-        when "esc", "ctrl+c"
-          cancel_prompt
-          [self, nil]
-        else
+        action = @mode.lookup(message.to_s)
+        if action
+          action.handler.call(self)
+        elsif @mode == Keymap::PROMPTING
           @text_input, cmd = @text_input.update(message)
           [self, cmd]
-        end
-      end
-
-      def handle_key_waiting(message)
-        key = message.to_s
-
-        case key
-        when "q", "ctrl+c"
-          stop_async_reactor
-          [self, Bubbletea.quit]
-        when "g"
-          enter_prompt_mode(:general_agent, nil)
-          [self, nil]
         else
           [self, nil]
         end
@@ -397,7 +330,7 @@ module Sift
       # --- Prompt mode ---
 
       def enter_prompt_mode(target, item)
-        @mode = :prompting
+        @mode = Keymap::PROMPTING
         @prompt_target = target
         @prompt_item = item
         @text_input = Bubbles::TextInput.new
@@ -407,7 +340,7 @@ module Sift
       end
 
       def cancel_prompt
-        @mode = @items.empty? ? :waiting : :reviewing
+        @mode = @items.empty? ? Keymap::WAITING : Keymap::REVIEWING
         @prompt_target = nil
         @prompt_item = nil
       end
@@ -518,18 +451,7 @@ module Sift
         parts.join("\n")
       end
 
-      # --- View / Editor ---
-
-      def handle_view
-        item = current_item
-        return [self, nil] unless item
-
-        callable = -> {
-          editor = Editor.new(sources: item.sources, item_id: item.id, session_id: item.session_id, restore_tty: false)
-          editor.open
-        }
-        [self, Bubbletea.exec(callable, message: ViewDoneMessage.new)]
-      end
+      # --- Close / Editor ---
 
       def handle_close(item)
         @queue.update(item.id, status: "closed")
@@ -559,8 +481,8 @@ module Sift
         end
         @index = @index.clamp(0, [@items.size - 1, 0].max)
 
-        @mode = :waiting if @items.empty? && @mode == :reviewing && running_count > 0
-        @mode = :reviewing if !@items.empty? && @mode == :waiting
+        @mode = Keymap::WAITING if @items.empty? && @mode == Keymap::REVIEWING && running_count > 0
+        @mode = Keymap::REVIEWING if !@items.empty? && @mode == Keymap::WAITING
 
         @items.empty? && running_count == 0
       end
@@ -632,7 +554,9 @@ module Sift
         parts << ""
 
         # Action bar
-        parts << "  #{Keymap.reviewing_bar(show_nav: @items.size > 1)}"
+        categories = [:action, :quit]
+        categories << :nav if @items.size > 1
+        parts << "  #{@mode.action_bar(categories: categories)}"
         parts << ""
 
         # Status bar
@@ -677,7 +601,7 @@ module Sift
         parts << ""
 
         # Action bar
-        parts << "  #{Keymap.waiting_bar}"
+        parts << "  #{@mode.action_bar(categories: [:action, :quit])}"
         parts << ""
 
         # Status bar

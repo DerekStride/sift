@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "Interactive TUI for reviewing code changes with AI-powered analysis and session continuity"
   spec.homepage = "https://github.com/sivers/sift"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.1.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.files = Dir.glob(%w[
     lib/**/*.rb

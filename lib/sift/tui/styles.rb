@@ -62,17 +62,6 @@ module Sift
       WAITING_TEXT = Lipgloss::Style.new
         .foreground("#666666")
         .italic(true)
-
-      # Action key colors (for building action bar)
-      KEY_COLORS = {
-        "v" => "#56B6C2", # cyan - view
-        "a" => "#5B8DEF", # blue - agent
-        "c" => "#98C379", # green - close
-        "g" => "#C678DD", # magenta - general
-        "n" => "#E5C07B", # yellow - next
-        "p" => "#E5C07B", # yellow - prev
-        "q" => "#666666", # gray - quit
-      }.freeze
     end
   end
 end
