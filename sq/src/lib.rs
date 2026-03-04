@@ -65,6 +65,10 @@ pub struct AddArgs {
     /// Comma-separated blocker IDs
     #[arg(long = "blocked-by", value_name = "IDS")]
     pub blocked_by: Option<String>,
+
+    /// Output as JSON
+    #[arg(long = "json")]
+    pub json: bool,
 }
 
 #[derive(Parser)]
@@ -148,12 +152,20 @@ pub struct EditArgs {
     /// Set blocker IDs (comma-separated, empty to clear)
     #[arg(long = "set-blocked-by", value_name = "IDS")]
     pub set_blocked_by: Option<String>,
+
+    /// Output as JSON
+    #[arg(long = "json")]
+    pub json: bool,
 }
 
 #[derive(Parser)]
 pub struct RmArgs {
     /// Item ID
     pub id: Option<String>,
+
+    /// Output as JSON
+    #[arg(long = "json")]
+    pub json: bool,
 }
 
 #[derive(Parser)]

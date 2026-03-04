@@ -17,8 +17,13 @@ pub fn execute(args: &RmArgs, queue_path: PathBuf) -> Result<i32> {
 
     match queue.remove(id)? {
         Some(removed) => {
-            println!("{}", removed.id);
-            eprintln!("Removed item {}", removed.id);
+            if args.json {
+                let json = serde_json::to_string_pretty(&removed.to_json_value())?;
+                println!("{}", json);
+            } else {
+                println!("{}", removed.id);
+                eprintln!("Removed item {}", removed.id);
+            }
             Ok(0)
         }
         None => {

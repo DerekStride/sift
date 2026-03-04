@@ -133,8 +133,13 @@ pub fn execute(args: &EditArgs, queue_path: PathBuf) -> Result<i32> {
 
     match queue.update(id, attrs)? {
         Some(updated) => {
-            println!("{}", updated.id);
-            eprintln!("Updated item {}", updated.id);
+            if args.json {
+                let json = serde_json::to_string_pretty(&updated.to_json_value())?;
+                println!("{}", json);
+            } else {
+                println!("{}", updated.id);
+                eprintln!("Updated item {}", updated.id);
+            }
             Ok(0)
         }
         None => {

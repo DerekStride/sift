@@ -84,11 +84,18 @@ pub fn execute(args: &AddArgs, queue_path: PathBuf) -> Result<i32> {
     };
 
     let item = queue.push(sources, args.title.clone(), metadata, None, blocked_by)?;
-    println!("{}", item.id);
-    eprintln!(
-        "Added item {} with {} source(s)",
-        item.id,
-        item.sources.len()
-    );
+
+    if args.json {
+        let json = serde_json::to_string_pretty(&item.to_json_value())?;
+        println!("{}", json);
+    } else {
+        println!("{}", item.id);
+        eprintln!(
+            "Added item {} with {} source(s)",
+            item.id,
+            item.sources.len()
+        );
+    }
+
     Ok(0)
 }

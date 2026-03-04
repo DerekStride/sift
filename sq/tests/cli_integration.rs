@@ -82,6 +82,25 @@ fn test_add_with_blocked_by() {
 }
 
 #[test]
+fn test_add_json() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args([
+            "-q", &qp, "add", "--text", "content", "--title", "My Item", "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["title"], "My Item");
+    assert_eq!(json["status"], "pending");
+    assert!(json["id"].as_str().unwrap().len() == 3);
+}
+
+#[test]
 fn test_add_multiple_sources() {
     let dir = TempDir::new().unwrap();
     let qp = queue_path(&dir);
@@ -348,6 +367,28 @@ fn test_edit_set_status() {
 }
 
 #[test]
+fn test_edit_json() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "test"])
+        .output()
+        .unwrap();
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "edit", &id, "--set-status", "closed", "--json"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["id"], id);
+    assert_eq!(json["status"], "closed");
+}
+
+#[test]
 fn test_edit_add_and_rm_source() {
     let dir = TempDir::new().unwrap();
     let qp = queue_path(&dir);
@@ -491,6 +532,27 @@ fn test_rm_item() {
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(json.as_array().unwrap().is_empty());
+}
+
+#[test]
+fn test_rm_json() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "add", "--text", "test"])
+        .output()
+        .unwrap();
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+
+    let output = sq_cmd()
+        .args(["-q", &qp, "rm", &id, "--json"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["id"], id);
 }
 
 #[test]
