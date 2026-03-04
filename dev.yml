@@ -10,9 +10,10 @@ commands:
   build: cargo build
   run-built: bundle exec exe/sift $@
   sift: bundle exec exe/sift $@
-  sq: cargo run -- $@
-  test: bundle exec rake test && cargo test
   debug: SIFT_LOG_LEVEL=debug bundle exec exe/sift $@
+  sq: cargo run -- $@
+  track: cargo run -- -q .sift/issues.jsonl $@
+  test: bundle exec rake test && cargo test
 
 check:
   test: bundle exec rake test
