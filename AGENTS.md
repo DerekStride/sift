@@ -139,12 +139,11 @@ The `agent-docs/` directory contains detailed documentation on specific subsyste
 
 ## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking.
+This project uses **sq** (sift-queue) for issue tracking.
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> -s in_progress  # Claim work
-bd close <id> -r "reason"      # Complete work
-bd dep add <id> <blocker>      # Add dependency
+sq -q .sift/issues.jsonl ready                              # Find available work
+sq -q .sift/issues.jsonl show <id>                          # View issue details
+sq -q .sift/issues.jsonl close <id> -r "reason"             # Complete work
+sq -q .sift/issues.jsonl edit <id> --set-blocked-by <ids>   # Add dependency
 ```
