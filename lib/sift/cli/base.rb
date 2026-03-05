@@ -146,17 +146,6 @@ module Sift
         HelpRenderer.new(self).render
       end
 
-      def cli_ui_available?
-        return @cli_ui_available if defined?(@cli_ui_available)
-
-        @cli_ui_available = begin
-          require "cli/ui"
-          ::CLI::UI::StdoutRouter.enable unless ::CLI::UI::StdoutRouter.current_id
-          true
-        rescue LoadError
-          false
-        end
-      end
     end
   end
 end

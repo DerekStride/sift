@@ -5,22 +5,20 @@ require_relative "lib/sift/version"
 Gem::Specification.new do |spec|
   spec.name = "sift"
   spec.version = Sift::VERSION
-  spec.authors = ["Derek Sivers"]
-  spec.email = ["derek@sivers.org"]
+  spec.authors = ["Derek Stride"]
+  spec.email = ["derek@stride.host"]
 
   spec.summary = "Human-in-the-loop code review with Claude"
   spec.description = "Interactive TUI for reviewing code changes with AI-powered analysis and session continuity"
-  spec.homepage = "https://github.com/sivers/sift"
+  spec.homepage = "https://github.com/derekstride/sift"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
   spec.files = Dir.glob(%w[
     lib/**/*.rb
     exe/*
-    LICENSE.txt
+    LICENSE.md
     README.md
-    sq-rust/src/**/*.rs
-    sq-rust/Cargo.*
   ])
   spec.bindir = "exe"
   spec.executables = ["sift"]
@@ -29,7 +27,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "async", "~> 2.0"
   spec.add_dependency "bubbletea", "~> 0.1"
   spec.add_dependency "bubbles", "~> 0.1"
-  spec.add_dependency "cli-ui", "~> 2.0"
   spec.add_dependency "lipgloss", "~> 0.2"
   spec.add_dependency "logger"
   spec.add_development_dependency "minitest", "~> 5.0"
