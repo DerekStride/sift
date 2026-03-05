@@ -55,6 +55,14 @@ class Sift::DryClientTest < Minitest::Test
     assert_includes stderr, "cwd=/some/path"
   end
 
+  def test_prompt_accepts_model_override
+    _, stderr = with_log_level("DEBUG") do
+      capture_io { @client.prompt("Hello", model: "haiku") }
+    end
+
+    assert_includes stderr, "model=haiku"
+  end
+
   def test_analyze_diff_delegates_to_prompt
     result = nil
     _, stderr = with_log_level("DEBUG") do
@@ -129,6 +137,15 @@ class Sift::ClientBuildArgsTest < Minitest::Test
     args = client.send(:build_args)
 
     assert_equal "claude", args.first
+  end
+
+  def test_build_args_model_override_takes_precedence
+    config = Sift::Config.new("agent" => { "model" => "sonnet" })
+    client = Sift::Client.new(config: config)
+    args = client.send(:build_args, model: "opus")
+
+    idx = args.index("--model")
+    assert_equal "opus", args[idx + 1]
   end
 
   def test_build_args_empty_flags_are_skipped

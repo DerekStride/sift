@@ -58,6 +58,16 @@ module Sift
       PROMPT_HINT = Lipgloss::Style.new
         .foreground("#666666")
 
+      PROMPT_KEY = Lipgloss::Style.new
+        .foreground("#666666")
+
+      PROMPT_CONFIG_LABEL = Lipgloss::Style.new
+        .foreground("#AAB2BF")
+        .bold(true)
+
+      PROMPT_VALUE = Lipgloss::Style.new
+        .bold(true)
+
       # Waiting message
       WAITING_TEXT = Lipgloss::Style.new
         .foreground("#666666")

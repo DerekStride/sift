@@ -19,6 +19,7 @@ module Sift
 
       AGENT_DOCS_DIR = File.expand_path("../../../../agent-docs", __FILE__)
       PROMPT_PREFIX_WIDTH = 45 # "  Prompt (Ctrl-G for editor, Esc to cancel): "
+      AGENT_MODELS = ["haiku", "sonnet", "opus"].freeze
 
       attr_reader :mode, :items, :index, :flash, :flash_style,
         :prompt_target, :width, :height
@@ -44,6 +45,9 @@ module Sift
         # Prompt context
         @prompt_target = nil
         @prompt_item = nil
+
+        # Item agent options (applied for each item-agent prompt)
+        @agent_options = default_agent_options
 
         # Notifications
         @flash = nil
@@ -371,6 +375,12 @@ module Sift
           submit_prompt
         when "ctrl+g"
           submit_prompt_via_editor
+        when "shift+tab", "backtab"
+          cycle_prompt_model
+          [self, nil]
+        when "ctrl+t"
+          toggle_item_agent_worktree
+          [self, nil]
         when "esc", "ctrl+c"
           cancel_prompt
           [self, nil]
@@ -397,10 +407,30 @@ module Sift
 
       # --- Prompt mode ---
 
+      def default_agent_options
+        model = @config.agent_model.to_s.downcase
+        model = "sonnet" unless AGENT_MODELS.include?(model)
+        { model: model, create_worktree: false }
+      end
+
+      def cycle_prompt_model
+        return unless @prompt_target == :item_agent || @prompt_target == :general_agent
+
+        idx = AGENT_MODELS.index(@agent_options[:model]) || 0
+        @agent_options[:model] = AGENT_MODELS[(idx + 1) % AGENT_MODELS.size]
+      end
+
+      def toggle_item_agent_worktree
+        return unless @prompt_target == :item_agent
+
+        @agent_options[:create_worktree] = !@agent_options[:create_worktree]
+      end
+
       def enter_prompt_mode(target, item)
         @mode = :prompting
         @prompt_target = target
         @prompt_item = item
+        @agent_options = default_agent_options
         @text_input = Bubbles::TextInput.new
         @text_input.placeholder = target == :general_agent ? "Ask anything..." : "Agent instruction..."
         @text_input.width = [@width - PROMPT_PREFIX_WIDTH, 10].max
@@ -441,17 +471,18 @@ module Sift
       def dispatch_agent(user_prompt)
         case @prompt_target
         when :item_agent
-          dispatch_item_agent(@prompt_item, user_prompt)
+          dispatch_item_agent(@prompt_item, user_prompt,
+            create_worktree: @agent_options[:create_worktree],
+            model: @agent_options[:model])
         when :general_agent
-          dispatch_general_agent(user_prompt)
+          dispatch_general_agent(user_prompt, model: @agent_options[:model])
         end
       end
 
-      def dispatch_item_agent(item, user_prompt)
+      def dispatch_item_agent(item, user_prompt, create_worktree: false, model: nil)
         return unless item
 
-        # Auto-create worktree on first agent invocation
-        if item.worktree.nil?
+        if create_worktree && item.worktree.nil?
           wt = Sift::Worktree.create(item.id,
             base_branch: @config.worktree_base_branch,
             setup_command: @config.worktree_setup_command)
@@ -465,15 +496,16 @@ module Sift
           user_prompt: user_prompt, opts: {
             session_id: item.session_id,
             append_system_prompt: agent_context, cwd: item.worktree&.path,
+            model: model,
           }
         )
         set_flash("Agent started for item #{item.id}", :info)
       end
 
-      def dispatch_general_agent(user_prompt)
+      def dispatch_general_agent(user_prompt, model: nil)
         @spawn_queue.push(
           type: :spawn_general, prompt_text: user_prompt,
-          user_prompt: user_prompt, opts: { append_system_prompt: agent_context }
+          user_prompt: user_prompt, opts: { append_system_prompt: agent_context, model: model }
         )
         set_flash("General agent started", :info)
       end
@@ -653,16 +685,12 @@ module Sift
           parts << ""
         end
 
-        # Prompt input
-        label = Styles::PROMPT_LABEL.render("Prompt")
-        hint = Styles::PROMPT_HINT.render("(Ctrl-G for editor, Esc to cancel)")
-        parts << "  #{label} #{hint}: #{@text_input.view}"
+        parts << "  #{render_status_bar}"
+        parts << "  #{render_prompt_hotkey_hint}"
         parts << ""
 
-        # Status bar
-        parts << "  #{render_status_bar}"
+        parts << "  #{Styles::PROMPT_LABEL.render("›")} #{@text_input.view}"
 
-        # Flash
         parts << "" << "  #{render_flash}" if @flash
 
         parts.join("\n")
@@ -696,6 +724,56 @@ module Sift
         parts << ""
         parts << "  #{render_status_bar}"
         parts.join("\n")
+      end
+
+      def render_prompt_hotkey_hint
+        if @prompt_target == :item_agent
+          parts = []
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Model")
+          parts << Styles::PROMPT_HINT.render(": ")
+          parts << Styles::PROMPT_VALUE.render(@agent_options[:model])
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Shift-Tab)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Worktree")
+          parts << Styles::PROMPT_HINT.render(": ")
+          parts << Styles::PROMPT_VALUE.render(@agent_options[:create_worktree] ? "yes" : "no")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Ctrl-T)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Editor")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Ctrl-G)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Cancel")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Esc)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Send")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Enter)")
+          parts.join
+        else
+          parts = []
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Model")
+          parts << Styles::PROMPT_HINT.render(": ")
+          parts << Styles::PROMPT_VALUE.render(@agent_options[:model])
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Shift-Tab)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Editor")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Ctrl-G)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Cancel")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Esc)")
+          parts << Styles::PROMPT_HINT.render(" • ")
+          parts << Styles::PROMPT_CONFIG_LABEL.render("Send")
+          parts << Styles::PROMPT_HINT.render(" ")
+          parts << Styles::PROMPT_KEY.render("(Enter)")
+          parts.join
+        end
       end
 
       def render_status_bar

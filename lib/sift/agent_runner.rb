@@ -19,8 +19,8 @@ module Sift
 
     # Spawn a background agent for the given item.
     # Returns immediately — the agent runs as a child fiber.
-    def spawn(item_id, prompt_text, user_prompt, session_id: nil, append_system_prompt: nil, cwd: nil)
-      Log.debug "agent spawn item=#{item_id} session=#{session_id || "new"} cwd=#{cwd || "(inherit)"} prompt=#{user_prompt.lines.first&.chomp}"
+    def spawn(item_id, prompt_text, user_prompt, session_id: nil, append_system_prompt: nil, cwd: nil, model: nil)
+      Log.debug "agent spawn item=#{item_id} model=#{model || "default"} session=#{session_id || "new"} cwd=#{cwd || "(inherit)"} prompt=#{user_prompt.lines.first&.chomp}"
 
       agent_task = @semaphore.async do
         Log.debug "agent running item=#{item_id}"
@@ -28,11 +28,11 @@ module Sift
           @queue.claim(item_id) do |claimed_item|
             next nil unless claimed_item
             @client.prompt(prompt_text, session_id: session_id,
-              append_system_prompt: append_system_prompt, cwd: cwd)
+              append_system_prompt: append_system_prompt, cwd: cwd, model: model)
           end
         else
           @client.prompt(prompt_text, session_id: session_id,
-            append_system_prompt: append_system_prompt, cwd: cwd)
+            append_system_prompt: append_system_prompt, cwd: cwd, model: model)
         end
       rescue Client::Error => e
         Log.warn "agent error item=#{item_id}: #{e.message}"
@@ -44,15 +44,15 @@ module Sift
 
     # Spawn a general-purpose agent not tied to any queue item.
     # Returns immediately — the agent runs as a child fiber.
-    def spawn_general(prompt_text, user_prompt, append_system_prompt: nil)
+    def spawn_general(prompt_text, user_prompt, append_system_prompt: nil, model: nil)
       @general_counter += 1
       key = format("_gen_%03d", @general_counter)
 
-      Log.debug "agent spawn_general key=#{key} prompt=#{user_prompt.lines.first&.chomp}"
+      Log.debug "agent spawn_general key=#{key} model=#{model || "default"} prompt=#{user_prompt.lines.first&.chomp}"
 
       agent_task = @semaphore.async do
         Log.debug "agent running general key=#{key}"
-        @client.prompt(prompt_text, append_system_prompt: append_system_prompt)
+        @client.prompt(prompt_text, append_system_prompt: append_system_prompt, model: model)
       rescue Client::Error => e
         Log.warn "agent error general key=#{key}: #{e.message}"
         e

@@ -39,9 +39,9 @@ sift --dry
 The core workflow in the review TUI:
 
 - **View** (`v`) — open item sources in `$EDITOR` to read the full context
-- **Agent** (`a`) — spawn a background agent for this item. You provide an instruction and the agent runs with the item's sources as context. When it finishes, the conversation transcript is appended to the item.
+- **Agent** (`a`) — spawn a background agent for this item. In the prompt, use `Shift-Tab` to cycle model (Haiku/Sonnet/Opus) and `Ctrl-T` to toggle worktree creation before sending.
+- **General** (`g`) — spawn a free-form agent not tied to any item. In the prompt, use `Shift-Tab` to cycle model before sending.
 - **Close** (`c`) — mark the item as closed and move to the next one
-- **General** (`g`) — spawn a free-form agent not tied to any item
 
 When you press `a` or `g`, type your instruction inline or press `Ctrl+G` to compose in `$EDITOR`.
 

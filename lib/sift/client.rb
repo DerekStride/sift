@@ -17,8 +17,8 @@ module Sift
 
     # Send a prompt to Claude, optionally resuming a session.
     # Returns Result with response text and session_id
-    def prompt(text, session_id: nil, append_system_prompt: nil, cwd: nil)
-      args = build_args(session_id:, append_system_prompt:)
+    def prompt(text, session_id: nil, append_system_prompt: nil, cwd: nil, model: nil)
+      args = build_args(session_id:, append_system_prompt:, model: model)
       Log.debug "client start cmd=#{args.join(" ")} cwd=#{cwd || "(inherit)"}"
       start = Time.now
 
@@ -48,12 +48,13 @@ module Sift
 
     private
 
-    def build_args(session_id: nil, append_system_prompt: nil)
+    def build_args(session_id: nil, append_system_prompt: nil, model: nil)
       args = Array(@config.agent_command).flat_map { |s| s.to_s.shellsplit }
       args += ["-p", "--output-format", "json"]
       args += @config.agent_flags if @config.agent_flags&.any?
       @config.agent_allowed_tools&.each { |tool| args += ["--allowedTools", tool] }
-      args += ["--model", @config.agent_model] if @config.agent_model
+      selected_model = model || @config.agent_model
+      args += ["--model", selected_model] if selected_model
       args += ["--permission-mode", @config.agent_permission_mode] if @config.agent_permission_mode
       args += ["--append-system-prompt", append_system_prompt] if append_system_prompt
       args += ["--resume", session_id] if session_id
@@ -93,9 +94,9 @@ module Sift
       @config = config
     end
 
-    def prompt(text, session_id: nil, append_system_prompt: nil, cwd: nil)
-      model = @config&.agent_model
-      Sift::Log.debug "[dry] model=#{model || "default"} session=#{session_id || "new"} cwd=#{cwd || "(inherit)"}"
+    def prompt(text, session_id: nil, append_system_prompt: nil, cwd: nil, model: nil)
+      selected_model = model || @config&.agent_model
+      Sift::Log.debug "[dry] model=#{selected_model || "default"} session=#{session_id || "new"} cwd=#{cwd || "(inherit)"}"
       Sift::Log.debug "[dry] prompt: #{text.lines.first&.chomp}"
       Client::Result.new(
         response: "[dry mode] No API call made.",

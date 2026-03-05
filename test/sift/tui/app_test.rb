@@ -212,7 +212,7 @@ class Sift::TUI::AppTest < Minitest::Test
     app&.send(:stop_async_reactor)
   end
 
-  def test_key_a_enters_prompt_mode
+  def test_key_a_enters_item_prompt_mode
     @queue.push(sources: [{ type: "text", content: "test" }])
     app = build_app
     app.init
@@ -244,7 +244,7 @@ class Sift::TUI::AppTest < Minitest::Test
     @queue.push(sources: [{ type: "text", content: "test" }])
     app = build_app
     app.init
-    app.update(make_key("a")) # enter prompt mode
+    app.send(:enter_prompt_mode, :item_agent, app.current_item)
 
     app.update(make_key("esc"))
 
@@ -259,13 +259,72 @@ class Sift::TUI::AppTest < Minitest::Test
     @queue.push(sources: [{ type: "text", content: "test" }])
     app = build_app
     app.init
-    app.update(make_key("a")) # enter prompt mode
+    app.send(:enter_prompt_mode, :item_agent, app.current_item)
 
     output = app.view
 
-    assert_includes output, "Prompt"
+    assert_includes output, "›"
+    assert_includes output, "Shift-Tab"
+    assert_includes output, "Ctrl-T"
     assert_includes output, "Ctrl-G"
     assert_includes output, "Esc"
+    assert_includes output, "Model"
+    assert_includes output, "Worktree"
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_shift_tab_cycles_item_agent_model
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.send(:enter_prompt_mode, :item_agent, app.current_item)
+
+    app.update(make_key("shift+tab"))
+
+    assert_equal "opus", app.instance_variable_get(:@agent_options)[:model]
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_shift_tab_cycles_general_agent_model
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.send(:enter_prompt_mode, :general_agent, nil)
+
+    app.update(make_key("shift+tab"))
+
+    assert_equal "opus", app.instance_variable_get(:@agent_options)[:model]
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_ctrl_t_toggles_item_agent_worktree
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.send(:enter_prompt_mode, :item_agent, app.current_item)
+
+    app.update(make_key("ctrl+t"))
+
+    assert_equal true, app.instance_variable_get(:@agent_options)[:create_worktree]
+  ensure
+    app&.send(:stop_async_reactor)
+  end
+
+  def test_general_prompt_hints_include_model_and_omit_worktree
+    @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.init
+    app.send(:enter_prompt_mode, :general_agent, nil)
+
+    output = app.view
+
+    assert_includes output, "Shift-Tab"
+    assert_includes output, "Model"
+    assert_includes output, "sonnet"
+    refute_includes output, "Worktree"
   ensure
     app&.send(:stop_async_reactor)
   end
@@ -377,6 +436,59 @@ class Sift::TUI::AppTest < Minitest::Test
     refute_includes prompt, "should not appear"
   ensure
     app&.send(:stop_async_reactor)
+  end
+
+  def test_dispatch_item_agent_without_worktree_does_not_create_one
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.instance_variable_set(:@spawn_queue, Thread::Queue.new)
+
+    called = false
+    Sift::Worktree.stub(:create, ->(*, **) { called = true }) do
+      app.send(:dispatch_item_agent, item, "Investigate", create_worktree: false)
+    end
+
+    refute called
+    req = app.instance_variable_get(:@spawn_queue).pop(true)
+    assert_nil req[:opts][:cwd]
+    assert_nil @queue.find(item.id).worktree
+  end
+
+  def test_dispatch_item_agent_with_worktree_creates_and_uses_worktree
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.instance_variable_set(:@spawn_queue, Thread::Queue.new)
+
+    created = Sift::Queue::Worktree.new(path: ".sift/worktrees/#{item.id}", branch: "sift/#{item.id}")
+
+    Sift::Worktree.stub(:create, ->(*, **) { created }) do
+      app.send(:dispatch_item_agent, item, "Investigate", create_worktree: true)
+    end
+
+    req = app.instance_variable_get(:@spawn_queue).pop(true)
+    assert_equal created.path, req[:opts][:cwd]
+    assert_equal created.path, @queue.find(item.id).worktree.path
+  end
+
+  def test_dispatch_item_agent_passes_selected_model
+    item = @queue.push(sources: [{ type: "text", content: "test" }])
+    app = build_app
+    app.instance_variable_set(:@spawn_queue, Thread::Queue.new)
+
+    app.send(:dispatch_item_agent, item, "Investigate", model: "opus")
+
+    req = app.instance_variable_get(:@spawn_queue).pop(true)
+    assert_equal "opus", req[:opts][:model]
+  end
+
+  def test_dispatch_general_agent_passes_selected_model
+    app = build_app
+    app.instance_variable_set(:@spawn_queue, Thread::Queue.new)
+
+    app.send(:dispatch_general_agent, "Investigate", model: "haiku")
+
+    req = app.instance_variable_get(:@spawn_queue).pop(true)
+    assert_equal "haiku", req[:opts][:model]
   end
 
   private
