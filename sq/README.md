@@ -4,6 +4,31 @@
 
 It manages queue items in a JSONL file used by the Sift review loop.
 
+## Install `sq` skills in Pi / Claude
+
+You can install this repo as a plugin source to get the `sq` skills.
+
+### Pi
+
+```bash
+pi install https://github.com/DerekStride/sift
+```
+
+### Claude
+
+```bash
+claude plugin marketplace install https://github.com/DerekStride/sift
+claude plugin install sq
+```
+
+### Cargo
+
+If you only want the `sq` CLI, install it from crates.io:
+
+```bash
+cargo install sift-queue
+```
+
 ## Build / Run
 
 From repository root:
