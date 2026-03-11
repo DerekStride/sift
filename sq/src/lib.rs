@@ -7,7 +7,12 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "sq", version, about = "Manage Sift's review queue")]
+#[command(
+    name = "sq",
+    version,
+    about = "Manage Sift's review queue",
+    after_help = "Stdin collection:\n  rg --json PATTERN | sq collect --by-file\n  rg --json -n -C2 PATTERN | sq collect --by-file --title-template \"migrate: {{filepath}}\""
+)]
 pub struct Cli {
     /// Path to queue file
     #[arg(short = 'q', long = "queue", value_name = "PATH", global = true)]

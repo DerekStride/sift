@@ -1090,6 +1090,51 @@ fn test_collect_by_file_json_output_returns_full_items() {
 }
 
 #[test]
+fn test_collect_by_file_with_description_metadata_and_blocked_by() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    let output = sq_cmd()
+        .args([
+            "-q",
+            &qp,
+            "collect",
+            "--by-file",
+            "--description",
+            "Remove foo",
+            "--metadata",
+            r#"{"kind":"migration"}"#,
+            "--blocked-by",
+            "abc,def",
+            "--json",
+        ])
+        .write_stdin(rg_json_input())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["description"], "Remove foo");
+    assert_eq!(items[0]["metadata"]["kind"], "migration");
+    assert_eq!(items[0]["blocked_by"], serde_json::json!(["abc", "def"]));
+}
+
+#[test]
+fn test_collect_by_file_empty_stdin_fails() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    sq_cmd()
+        .args(["-q", &qp, "collect", "--by-file"])
+        .write_stdin("")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no stdin input received"));
+}
+
+#[test]
 fn test_collect_requires_split_mode() {
     let dir = TempDir::new().unwrap();
     let qp = queue_path(&dir);
@@ -1127,7 +1172,20 @@ fn test_collect_title_and_title_template_are_mutually_exclusive() {
 }
 
 #[test]
-fn test_collect_unsupported_input_fails() {
+fn test_collect_top_level_by_file_without_subcommand_fails() {
+    let dir = TempDir::new().unwrap();
+    let qp = queue_path(&dir);
+
+    sq_cmd()
+        .args(["-q", &qp, "--by-file"])
+        .write_stdin(rg_json_input())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unexpected argument '--by-file'"));
+}
+
+#[test]
+fn test_collect_unsupported_input_fails_atomically() {
     let dir = TempDir::new().unwrap();
     let qp = queue_path(&dir);
 
@@ -1139,6 +1197,8 @@ fn test_collect_unsupported_input_fails() {
         .stderr(predicate::str::contains(
             "could not detect a supported stdin format",
         ));
+
+    assert!(!dir.path().join("queue.jsonl").exists());
 }
 
 #[test]
@@ -1147,7 +1207,10 @@ fn test_collect_appears_in_help() {
         .args(["--help"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("collect"));
+        .stdout(predicate::str::contains("collect"))
+        .stdout(predicate::str::contains(
+            "rg --json PATTERN | sq collect --by-file",
+        ));
 }
 
 // ── Prime Command ───────────────────────────────────────────────────────────
