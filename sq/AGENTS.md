@@ -49,6 +49,14 @@ cargo test test_name
    - Keep command-specific behavior in command files.
    - Share logic only when it reduces duplication without obscuring behavior.
 
+## Release workflow
+
+When preparing an `sq` release, use the project-scoped skill:
+
+- `.agents/skills/release-sq/SKILL.md`
+
+It documents the maintainer checklist through version bump, test validation, release notes draft, and tag creation/push. GitHub Release publication remains a manual step.
+
 ## Common feature touchpoints
 
 - Add flag/subcommand:
