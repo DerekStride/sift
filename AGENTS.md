@@ -2,11 +2,13 @@
 
 ## Project Overview
 
-**Sift** is a queue-driven review system where humans make decisions and agents do the work. It inverts the typical agent CLI pattern: instead of agents driving with human oversight, humans drive decisions while agents provide analysis and execute tasks.
+**Sift** is a queue-driven review system where humans make decisions and agents do the work.
+
+This repository owns the **Sift TUI and agent workflow**. The `sq` queue CLI now lives in its own repository and is treated as an external dependency.
 
 ## Key Concepts
 
-- **Queue**: JSONL-based work items with typed sources (diff, file, transcript, text)
+- **Queue**: JSONL-based work items consumed by the review loop
 - **Review Loop**: TUI where humans view items, spawn agents, close items, or ask general questions
 - **Background Agents**: Run as Async fibers with semaphore-limited concurrency
 - **Sticky Sessions**: Agent conversations persist per item via Claude session IDs
@@ -15,23 +17,30 @@
 
 ## Project Structure
 
-```
+```text
 lib/sift/
-├── cli.rb                  # CLI module
+├── cli.rb
 ├── cli/
-│   ├── base.rb             # Base command class (OptionParser, subcommand routing)
-│   ├── help_renderer.rb    # gh-style help output
-│   ├── sift_command.rb     # `sift` TUI entry point
-│   ├── queue_command.rb    # `sq` root command dispatcher
-│   └── queue/              # One class per sq subcommand (add, edit, list, show, rm)
-├── review_loop.rb          # Main TUI flow with Async concurrency
-├── queue.rb                # JSONL queue with file locking
-├── client.rb               # Claude CLI wrapper with session support
-├── agent_runner.rb         # Background agent management (Async + Semaphore)
-└── log.rb                  # Logging with TUI-safe buffering
+│   ├── base.rb
+│   ├── help_renderer.rb
+│   ├── init.rb
+│   └── sift_command.rb
+├── queue.rb
+├── client.rb
+├── agent_runner.rb
+├── worktree.rb
+├── editor.rb
+├── prime.rb
+└── tui/
+    ├── app.rb
+    ├── card.rb
+    ├── exec_command.rb
+    ├── keymap.rb
+    ├── messages.rb
+    └── styles.rb
 ```
 
-Other supporting modules (statusline, editor, session transcript parsing, etc.) live alongside these in `lib/sift/`. Explore the directory for the full picture.
+Other supporting modules live alongside these in `lib/sift/`.
 
 ## Running Tests
 
@@ -41,109 +50,72 @@ bundle exec rake test
 
 ## Testing Rules
 
-- **No real git commands in tests.** Never call `system("git ...")` or execute git via `Open3` in test code. Use `FakeGit` (defined in `test/support/fake_git.rb`) for all git interactions. It supports configurable behavior via constructor kwargs.
+- **No real git commands in tests.** Never call `system("git ...")` or execute git via `Open3` in test code. Use `FakeGit` (defined in `test/support/fake_git.rb`) for all git interactions.
 - **Isolate config from the environment.** Tests must not depend on `.sift/config.yml` or `~/.config/sift/config.yml`. Use `Config.load(project_path: "/nonexistent", user_path: "/nonexistent")` for defaults-only config, or stub `Config.load`.
 
 ## CLI Entry Points
 
-Two executables in `exe/`:
-
 - **`sift`** — Interactive review loop TUI. Run `sift --help` to see all options.
-- **`sq`** — Queue management CLI. Add, list, show, edit, and remove queue items.
+- **`sq`** — External queue CLI used alongside Sift. It is no longer implemented in this repository.
 
-### `sq` Subcommands
+## Integration with `sq`
+
+Sift shells out to `sq prime` to preload queue workflow context for agents.
+
+Common queue operations are expected to happen through `sq`, for example:
 
 ```bash
-sq add --text "Review this"             # Add item with text source
-sq add --diff changes.patch             # Add item with diff source
-sq add --stdin text < file.txt          # Add from stdin
-sq add --system-prompt prompts/sec.md   # Per-item system prompt
-sq add --text "X" --blocked-by a1b      # Add with dependency
-sq list --status pending                # List/filter items
-sq list --ready                         # Pending + unblocked items
-sq list --filter 'select(.p == 0)'      # jq filter expression
-sq list --sort .metadata.priority       # Sort by jq path
-sq list --sort .created_at --reverse    # Sort descending
-sq list --json                          # JSON output
-sq show <id> --json                     # Show item details
-sq edit <id> --set-status closed        # Modify item
-sq edit <id> --set-blocked-by a1b,c3d   # Set dependencies
-sq rm <id>                              # Remove item
+sq add --text "Review this"
+sq list --status pending
+sq show <id>
+sq edit <id> --set-status closed
 ```
 
-Run `sq --help` or `sq <command> --help` for full flag details.
+When updating docs or UX around queue management, keep the boundary clear:
 
-### Adding a New Subcommand
+- `sq` owns queue management UX
+- `sift` owns review-loop UX
 
-Each subcommand is a `Sift::CLI::Base` subclass. The pattern:
+## Review Loop Flow
 
-```ruby
-class Sift::CLI::Queue::MyCommand < Sift::CLI::Base
-  command_name "mycommand"
-  summary "One-line description"
-
-  def define_flags(parser, options)
-    parser.on("--flag VALUE", "Description") { |v| options[:flag] = v }
-    super  # chains inherited flags from parent
-  end
-
-  def execute
-    # Do work, return exit code (0 = success, 1 = error)
-    0
-  end
-end
-```
-
-Register it in `lib/sift/cli/queue_command.rb`:
-```ruby
-register_subcommand Queue::MyCommand, category: :core
-```
-
-## Key Patterns
-
-### Review Loop Flow
-
-1. Load pending items from queue
-2. Display item card (sources grouped by type)
+1. Load pending items from the queue
+2. Display the current item card
 3. Human chooses action: `v`iew / `a`gent / `c`lose / `g`eneral / `n`ext / `p`rev / `q`uit
 4. If `a`gent: prompt for instruction → spawn background agent → continue reviewing
-5. If `g`eneral: prompt for instruction → spawn free-form agent → result becomes new queue item
-6. If `c`lose: mark item closed, advance to next
-7. When agents finish: transcript appended as source, session_id stored for continuity
+5. If `g`eneral: prompt for instruction → spawn free-form agent → result becomes a new queue item
+6. If `c`lose: mark the item closed and advance
+7. When agents finish: transcript appended as source, session ID stored for continuity
 8. Loop exits when no pending items remain and no agents are running
 
-### Agent Session Continuity
+## Agent Session Continuity
 
 - First agent turn: all item sources are included in the prompt
-- Subsequent turns: only the user prompt is sent (Claude `--resume` handles context)
+- Subsequent turns: only the user prompt is sent (`claude --resume` handles context)
 - Session ID is stored on the queue item for future turns
 
-### Async Concurrency
+## Async Concurrency
 
 - `AgentRunner` manages background fibers gated by `Async::Semaphore`
-- `ReviewLoop` polls for completed agents between user actions
-- Non-blocking input loop ticks the statusline spinner while waiting for keystrokes
-- `Log.quiet { ... }` buffers debug/info logs during input to prevent stderr corruption
+- `App` polls for completed agents between user actions
+- Non-blocking input keeps the TUI responsive while agents run
+- `Log.quiet { ... }` buffers logs during input to avoid stderr corruption
 
-### File Locking
+## File Locking
 
-- Queue uses `flock(LOCK_EX)` for writes, `flock(LOCK_SH)` for reads
-- `claim(id)` atomically transitions pending → in_progress (with auto-release block form)
-- Corrupt JSONL lines are skipped with a warning, not fatal
+- Queue uses `flock(LOCK_EX)` for writes and `flock(LOCK_SH)` for reads
+- `claim(id)` atomically transitions `pending -> in_progress`
+- Corrupt JSONL lines are skipped with a warning rather than treated as fatal
 
 ## Agent Docs
 
-The `agent-docs/` directory contains detailed documentation on specific subsystems. Consult these when working in the relevant area:
-
-- **`githooks.md`** — How sift installs per-worktree git hooks, the exclude strategy, and why we chose per-worktree over global hooks
+The `agent-docs/` directory contains detailed documentation on specific subsystems. Consult these when working in the relevant area.
 
 ## Issue Tracking
 
-This project uses **sq** (sift-queue) for issue tracking.
+This project uses **sq** for issue tracking.
 
 ```bash
-sq -q .sift/issues.jsonl ready                              # Find available work
-sq -q .sift/issues.jsonl show <id>                          # View issue details
-sq -q .sift/issues.jsonl close <id> -r "reason"             # Complete work
-sq -q .sift/issues.jsonl edit <id> --set-blocked-by <ids>   # Add dependency
+sq -q .sift/issues.jsonl ready
+sq -q .sift/issues.jsonl show <id>
+sq -q .sift/issues.jsonl edit <id> --set-blocked-by <ids>
 ```
